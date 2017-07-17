@@ -1,14 +1,14 @@
 --[[
 
-    You can configure multiple sets of research tiers, each set separated by a semi-colon (;).
+    You can configure multiple sets of research tiers, each set separated by a colon (:).
 
-    Each set has several fields defining amount of tiers, cost and ingredients, each field
+    Each set has several fields defining amount of levels, cost and ingredients, each field
     is separated by a comma.
 
     The fields are:
 
-    1. [int]    Level of the previous tier required to start on this tier, or 0 to have no dependency.
-    2. [int]    The amount of technologies in this tier, use 0 for infinite.
+    1. [int]    Level of the previous tier required to start on this tier, or 0 to have no dependency on the previous tier.
+    2. [int]    The amount of technologies (levels) in this tier, use 0 for infinite.
     3. [ratio]  The bonus per level of research.
     4. [int]    The duration of each cycle.
     5. [string] A math expression for the cycle cost of each technology. (See count_formula.)
