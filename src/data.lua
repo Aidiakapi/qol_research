@@ -18,7 +18,7 @@ for i, v in ipairs(qol_types) do
             if tier.is_split_technology then
                 extensions[#extensions + 1] = {
                     type = 'technology',
-                    name = 'qol-' .. v.name .. '-' .. tostring(tier_index) .. '-1',
+                    name = ('qol-%s-%d-1'):format(v.name, tier_index),
                     icon = '__qol_research__/graphics/' .. v.name .. '.png',
                     icon_size = 128,
                     effects = effects_table,
@@ -37,7 +37,7 @@ for i, v in ipairs(qol_types) do
                 }
                 extensions[#extensions + 1] = {
                     type = 'technology',
-                    name = 'qol-' .. v.name .. '-' .. tostring(tier_index) .. '-' .. tostring(tiers[tier_index + 1].previous_tier_requirement + 1),
+                    name = ('qol-%s-%d-%d'):format(v.name, tier_index, tiers[tier_index + 1].previous_tier_requirement + 1),
                     icon = '__qol_research__/graphics/' .. v.name .. '.png',
                     icon_size = 128,
                     effects = effects_table,
@@ -55,7 +55,7 @@ for i, v in ipairs(qol_types) do
             else
                 extensions[#extensions + 1] = {
                     type = 'technology',
-                    name = 'qol-' .. v.name .. '-' .. tostring(tier_index) .. '-1',
+                    name = ('qol-%s-%d-1'):format(v.name, tier_index),
                     icon = '__qol_research__/graphics/' .. v.name .. '.png',
                     icon_size = 128,
                     effects = effects_table,

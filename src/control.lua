@@ -1,216 +1,159 @@
---[[
+local qol = {}
 
-Because the game doesn't fire events when you complete a level of research which has multiple levels, instead
-every tick, one technology is checked for one force. If a change in that tech is detected, it'll update the
-force.
-
-All data is stored in the global object, with the exception of update_list, which is generated solely from
-startup settings, and the qol_types source file. Unless these files change, no desync should be possible.
-
-]]
-
-local qol_types = require('qol_types')()
-local parse_config = require('parse_config')
-local api = {}
+local print, assert = (function ()
+    local global_print = print
+    return function (...)
+        local first = select(1, ...)
+        global_print(('[qol] %s'):format(first), select(2, ...))
+    end, function (condition, message, level)
+        if not condition then
+            error('[qol] ' .. tostring(message), (level or 1) + 1)
+        end
+    end
+end)()
 
 local function player_print(...)
-    for _, player in pairs(game.players) do
-        player.print(...)
-    end
-end
-
-local update_list = {}
-for _, qol_type in ipairs(qol_types) do
-    if qol_type.bonus_fields then
-        local config = settings.startup['qol-' .. qol_type.name .. '-research-config']
-        if type(config) ~= 'string' or #config == 0 then
-            config = qol_type.default_technology_config
-        end
-        local tiers = parse_config(config, qol_type.allow_rational_bonus)
-
-        for tier_index, tier in ipairs(tiers) do
-            local update_entry = 
-            {
-                qol_type = qol_type,
-                bonus_per_technology = tier.bonus_per_technology,
-                identifier = string.format('%s-%d', qol_type.name, tier_index),
-                tech_name1 = string.format('qol-%s-%d-1', qol_type.name, tier_index),
-                tech_name2 = tier.is_split_technology and string.format('qol-%s-%d-%d', qol_type.name, tier_index, tiers[tier_index + 1].previous_tier_requirement + 1) or nil,
-                tech_levels1 = tier.is_split_technology and tiers[tier_index + 1].previous_tier_requirement or tier.technology_count,
-                tech_levels2 = tier.is_split_technology and (tier.technology_count - tiers[tier_index + 1].previous_tier_requirement) or nil
-            }
-
-            update_list[#update_list + 1] = update_entry
+    print(...)
+    if game and game.players then
+        for _, player in pairs(game.players) do
+            player.print(...)
         end
     end
 end
 
-function api.apply_stat_modifier(force, qol_type, modifier, use_multiplier)
-    if qol_type.bonus_fields == nil then return end
+local technologies = require('technology-info')
 
-    -- Apply optional modifier
-    if use_multiplier and qol_type.allow_rational_bonus then
-        modifier = modifier * settings.global[('qol-%s-multiplier'):format(qol_type.name)].value
+function qol:add_modifier(force, fields, modifier)
+    assert(force and force.valid, 'force be modified must be valid', 2)
+    local data = self.forces[force.name]
+    assert(data, 'cannot add modifier to unknown force', 2)
+    assert(type(fields) == 'table', 'fields must be a table', 2)
+    assert(type(modifier) == 'number', 'modifier must be a number', 2)
+
+    for _, field in ipairs(fields) do
+        if data[field] then
+            data[field] = data[field] + modifier
+        else
+            data[field] = modifier
+        end
+        force[field] = force[field] + modifier
     end
-    local bonuses = global.bonuses[force.name]
+end
 
-    -- Apply the change to each field
-    for _, field_name in ipairs(qol_type.bonus_fields) do
-        local disabled = false
-        if qol_type.field_settings then
-            for _, field_setting in ipairs(qol_type.field_settings) do
-                if field_name == field_setting[1] and not settings.global[('qol-%s-field-%s'):format(qol_type.name, field_setting[2])].value then
-                    disabled = true
-                    break
+function qol:recalculate_all_bonuses()
+    if not global.qol_data then
+        print('warning: recalculate_all_bonuses was called but no state is available')
+        return
+    end
+    assert(game, 'recalculate_all_bonuses requires game to be available', 2)
+    print('recalculating all bonuses')
+
+    -- Store the old modifiers and clean the data
+    local old_modifiers = self.forces
+    self.forces = {}
+
+    -- Add all forces
+    for _, force in pairs(game.forces) do
+        if force.valid then
+            self.forces[force.name] = {}
+            for _, tech in ipairs(technologies) do
+                -- Add flat bonus
+                qol:add_modifier(force, tech.fields, tech:get_flat_bonus())
+
+                -- Add research based bonus
+                for tier_index = 1, tech.tier_count do
+                    local level, _, modifier_per_level = tech:get_tier_info(tier_index, force)
+                    local modifier = (level * modifier_per_level) * tech:get_bonus_multiplier()
+                    qol:add_modifier(force, tech.fields, modifier)
                 end
             end
         end
-
-        if not disabled then
-            force[field_name] = force[field_name] + modifier
-            if not bonuses[field_name] then
-                bonuses[field_name] = modifier
-            else
-                bonuses[field_name] = bonuses[field_name] + modifier
-            end
-        end
-    end
-end
-
-function api.apply_research_bonuses(force, update_entry)
-    assert(force.valid, 'force must be valid')
-    
-    local tech1, tech2 = force.technologies[update_entry.tech_name1], update_entry.tech_name2 and force.technologies[update_entry.tech_name2] or nil
-    
-    local level
-    if tech1.researched then
-        level = update_entry.tech_levels1
-    else
-        level = tech1.level - 1
-    end
-    if tech2 and tech2.researched then
-        level = level + update_entry.tech_levels2
-    elseif tech2 then
-        level = level +  (tech2.level - 1 - update_entry.tech_levels1)
     end
 
-    local old_level = global.levels[force.name][update_entry.identifier] or 0
-    if level == old_level then return end
-
-    global.levels[force.name][update_entry.identifier] = level
-    --player_print(string.format('%s updated from %d to %d for %s', update_entry.identifier, old_level, level, force.name))
-
-    api.apply_stat_modifier(force, update_entry.qol_type, (level - old_level) * update_entry.bonus_per_technology, true)
-end
-
--- ----------------
--- Force management
--- ----------------
-function api.include_force(force)
-    assert(force and force.valid, 'cannot include an invalid force')
-
-    global.force_update_list[#global.force_update_list + 1] = force
-    assert(not global.levels[force.name], 'duplicate force added')
-    assert(not global.bonuses[force.name], 'duplicate force added')
-    global.levels[force.name] = {}
-    global.bonuses[force.name] = {}
-
-    -- Apply flat bonuses
-    for _, qol_type in ipairs(qol_types) do
-        local flat_bonus = settings.global[('qol-%s-flat-bonus'):format(qol_type.name)].value
-        api.apply_stat_modifier(force, qol_type, flat_bonus, false)
-    end
-
-    -- Apply research based bonuses
-    for _, update_entry in ipairs(update_list) do
-        api.apply_research_bonuses(force, update_entry)
-    end
-end
-function api.prepare_forces()
-    if global.force_update_list then return end
-    global.force_update_list = {}
-    if not global.levels then global.levels = {} end
-    local levels = global.levels
-    if not global.bonuses then global.bonuses = {} end
-
-    for _, force in pairs(game.forces) do
-        api.include_force(force)
-    end
-end
-function api.reset_force_bonuses(delayed_reset_till)
-    if delayed_reset_till then
-        if not global.delayed_reset_till or global.delayed_reset_till < delayed_reset_till then
-            global.delayed_reset_till = delayed_reset_till
-        end
-        return
-    end
-    if not global.levels then return end
-
-    -- Store the previously applied bonuses
-    local previous_bonuses = global.bonuses
-    
-    -- Remove all data
-    global.levels = nil
-    global.bonuses = nil
-    global.force_update_list = nil
-
-    -- Recreate the list to immediately reapply any bonuses
-    api.prepare_forces()
-
-    -- Remove the old bonuses
-    for force_name, bonuses in pairs(previous_bonuses) do
+    -- Remove old modifiers
+    for force_name, modifiers in pairs(old_modifiers) do
         local force = game.forces[force_name]
         if force and force.valid then
-            for field_name, modifier in pairs(bonuses) do
-                force[field_name] = force[field_name] - modifier
+            for field, modifier in pairs(modifiers) do
+                force[field] = force[field] - modifier
             end
         end
     end
 end
 
-script.on_event(defines.events.on_force_created, function (event)
-    -- If the list hasn't been created, ignore it
-    if not global.force_update_list then return end
-    api.include_force(event.force)
+script.on_event(defines.events.on_research_finished, function (event)
+    if not event.research.name:find('^qol-') then return end
+    print(('research %s completed'):format(event.research.name))
+
+    qol:recalculate_all_bonuses()
+end)
+
+script.on_event(defines.events.on_runtime_mod_setting_changed, function ()
+    qol:recalculate_all_bonuses()
+end)
+
+script.on_event(defines.events.on_force_created, function ()
+    qol:recalculate_all_bonuses()
 end)
 
 script.on_event(defines.events.on_forces_merging, function (event)
-    -- For some reason it takes a little bit to get forces properly updated
-    -- although it sucks, we cannot just instantly reapply the bonuses, and
-    -- instead have to wait.
-    api.reset_force_bonuses(event.tick + 2)
-end)
-script.on_event(defines.events.on_runtime_mod_setting_changed, function (event)
-    api.reset_force_bonuses()
+    qol.recalculate_on_tick = event.tick + 1
 end)
 
-remote.add_interface('qol_research', {
-    reset_force_bonuses = reset_force_bonuses
-})
+do
+    local function create_qol_data()
+        global.qol_data = {
+            forces = {}
+        }
+        for force_name in pairs(game.forces) do
+            global.qol_data.forces[force_name] = {}
+        end
+    end
+    local function create_metatable()
+        assert(global.qol_data, 'qol_data must be created before metatable can be set up')
+        local data = global.qol_data
+        setmetatable(qol, {
+            __index = function (self, key)
+                local fn = rawget(qol, key)
+                if fn then return fn end
+                return data[key]
+            end,
+            __newindex = function (self, key, value)
+                local fn = rawget(qol, key)
+                if fn then error(('[qol] cannot assign to field %q'):format(key), 2) end
+                data[key] = value
+            end
+        })
+    end
 
-local function get_force_and_update_entry(tick)
-    local force_index = tick % #global.force_update_list
-    local update_index = ((tick - force_index) / #global.force_update_list) % #update_list
-    return global.force_update_list[force_index + 1], update_list[update_index + 1]
+    script.on_init(function ()
+        create_qol_data()
+        create_metatable()
+    end)
+    script.on_load(function ()
+        if global.qol_data then
+            create_metatable()
+        else
+            print('warning: global.qol_data nonexistent')
+        end
+    end)
+
+    script.on_event(defines.events.on_tick, function (event)
+        if not global.qol_data then
+            create_qol_data()
+            create_metatable()
+            for key in pairs(global) do
+                if key ~= 'qol_data' then
+                    global[key] = nil
+                end
+            end
+            qol:recalculate_all_bonuses()
+            qol.recalculate_on_tick = nil
+            return
+        end
+        if qol.recalculate_on_tick and qol.recalculate_on_tick <= event.tick then
+            qol.recalculate_on_tick = nil
+            qol:recalculate_all_bonuses()
+        end
+    end)
 end
-
--- script.on_event(defines.events.on_research_started, function (event)
---     event.research.force.research_progress = 1
--- end)
-
-script.on_event(defines.events.on_tick, function (event)
-    -- Special case for a delayed reset, no updates while a reset is scheduled
-    if global.delayed_reset_till and event.tick < global.delayed_reset_till then
-        global.delayed_reset_till = nil
-        api.reset_force_bonuses()
-        return
-    end
-    api.prepare_forces()
-    local force, update_entry = get_force_and_update_entry(event.tick)
-    -- There's an invalid force, just reset all bonuses and halt this frame's execution
-    if not force or not force.valid then
-        api.reset_force_bonuses()
-    else
-        api.apply_research_bonuses(force, update_entry)
-    end
-end)
