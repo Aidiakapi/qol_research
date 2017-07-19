@@ -36,7 +36,7 @@ function qol:add_modifier(force, fields, modifier)
         else
             data[field] = modifier
         end
-        force[field] = force[field] + modifier
+        force[field] = data[field]
     end
 end
 
@@ -49,14 +49,14 @@ function qol:recalculate_all_bonuses()
     print('recalculating all bonuses')
 
     -- Store the old modifiers and clean the data
-    local old_modifiers = self.forces
+    -- local old_modifiers = self.forces
     self.forces = {}
 
     -- Add all forces
     for _, force in pairs(game.forces) do
         if force.valid then
             self.forces[force.name] = {}
-            for _, tech in ipairs(technologies) do
+            for _, tech in ipairs(technologies()) do
                 -- Add flat bonus
                 qol:add_modifier(force, tech.fields, tech:get_flat_bonus())
 
@@ -71,14 +71,14 @@ function qol:recalculate_all_bonuses()
     end
 
     -- Remove old modifiers
-    for force_name, modifiers in pairs(old_modifiers) do
+    --[[ for force_name, modifiers in pairs(old_modifiers) do
         local force = game.forces[force_name]
         if force and force.valid then
             for field, modifier in pairs(modifiers) do
                 force[field] = force[field] - modifier
             end
         end
-    end
+    end ]]
 end
 
 script.on_event(defines.events.on_research_finished, function (event)
