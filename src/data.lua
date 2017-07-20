@@ -12,13 +12,16 @@ for i, v in ipairs(qol_types) do
             config = v.default_technology_config
         end
         local tiers = parse_config(config, v.allow_rational_bonus)
-        
+
         for tier_index, tier in ipairs(tiers) do
             local effects_table = v.effects_table_factory and v.effects_table_factory(tier.bonus_per_technology) or nil
+
+            local localised_description = { ('technology-description.qol-%s'):format(v.name), v.description_factory(tier.bonus_per_technology) }
             if tier.is_split_technology then
                 extensions[#extensions + 1] = {
                     type = 'technology',
                     name = ('qol-%s-%d-1'):format(v.name, tier_index),
+                    localised_description = localised_description,
                     icon = '__qol_research__/graphics/' .. v.name .. '.png',
                     icon_size = 128,
                     effects = effects_table,
@@ -38,6 +41,7 @@ for i, v in ipairs(qol_types) do
                 extensions[#extensions + 1] = {
                     type = 'technology',
                     name = ('qol-%s-%d-%d'):format(v.name, tier_index, tiers[tier_index + 1].previous_tier_requirement + 1),
+                    localised_description = localised_description,
                     icon = '__qol_research__/graphics/' .. v.name .. '.png',
                     icon_size = 128,
                     effects = effects_table,
@@ -56,6 +60,7 @@ for i, v in ipairs(qol_types) do
                 extensions[#extensions + 1] = {
                     type = 'technology',
                     name = ('qol-%s-%d-1'):format(v.name, tier_index),
+                    localised_description = localised_description,
                     icon = '__qol_research__/graphics/' .. v.name .. '.png',
                     icon_size = 128,
                     effects = effects_table,

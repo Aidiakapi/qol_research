@@ -65,30 +65,36 @@ return function (unfiltered)
     -- Tier 4 (25%): 125, 250, 400, 600, 900
     -- Tier 5 (30%): 200, 400, 600, 800, 1000, 1200, 1400, ...
     local rational_default_config = '0,5,1/10,10,25*2^(L-1)+25*L,science-pack-1,1:3,5,3/20,15,25*2^(L-1)+50*L,science-pack-1,1,science-pack-2,1:3,5,2/10,20,25*2^(L-1)+75*L,science-pack-1,1,science-pack-2,1,science-pack-3,1:3,5,1/4,25,25*2^(L-1)+100*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1:3,0,3/10,30,200*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+    local percentage_description = function (value) return ('%g%%'):format(value * 100) end
+    local pluralize_description = function (unit) return function (value) return ('%d %s%s'):format(value, unit, value == 1 and '' or 's') end end
     local data = {
         {
             name = 'crafting-speed',
             allow_rational_bonus = true,
             default_technology_config = rational_default_config,
-            bonus_fields = { 'manual_crafting_speed_modifier' }
+            bonus_fields = { 'manual_crafting_speed_modifier' },
+            description_factory = percentage_description
         },
         {
             name = 'inventory-size',
             allow_rational_bonus = false,
             default_technology_config = '0,2,5,15,125*L,science-pack-1,1:1,2,5,20,175*L,science-pack-1,1,science-pack-2,1:1,2,5,25,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1:1,2,5,30,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
-            bonus_fields = { 'character_inventory_slots_bonus' }
+            bonus_fields = { 'character_inventory_slots_bonus' },
+            description_factory = pluralize_description('slot')
         },
         {
             name = 'mining-speed',
             allow_rational_bonus = true,
             default_technology_config = rational_default_config,
-            bonus_fields = { 'manual_mining_speed_modifier' }
+            bonus_fields = { 'manual_mining_speed_modifier' },
+            description_factory = percentage_description
         },
         {
             name = 'movement-speed',
             allow_rational_bonus = true,
             default_technology_config = '0,5,1/20,10,25*2^(L-1)+25*L,science-pack-1,1:3,5,1/20,15,25*2^(L-1)+50*L,science-pack-1,1,science-pack-2,1:3,5,1/20,20,25*2^(L-1)+75*L,science-pack-1,1,science-pack-2,1,science-pack-3,1:3,5,1/20,25,25*2^(L-1)+100*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1:3,0,1/20,30,200*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1',
-            bonus_fields = { 'character_running_speed_modifier' }
+            bonus_fields = { 'character_running_speed_modifier' },
+            description_factory = percentage_description
         },
         {
             name = 'player-reach',
@@ -105,7 +111,8 @@ return function (unfiltered)
             {
                 { 'character_item_drop_distance_bonus', 'item-drop-distance' },
                 { 'character_resource_reach_distance_bonus', 'resource-reach-distance' }
-            }
+            },
+            description_factory = pluralize_description('tile')
         },
         {
             name = 'toolbelts',
@@ -116,7 +123,8 @@ return function (unfiltered)
                     type = "num-quick-bars",
                     modifier = amount
                 } }
-            end
+            end,
+            description_factory = pluralize_description('belt')
         }
     }
 
