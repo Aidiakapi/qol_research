@@ -36,7 +36,7 @@ for i, v in ipairs(qol_types) do
                     },
                     max_level = tostring(tiers[tier_index + 1].previous_tier_requirement),
                     upgrade = true,
-                    order = 'z-z-z-' .. tostring(order_lookup[i]) .. '-' .. tostring(order_lookup[tier_index]) .. '-a'
+                    order = 'qol-research-' .. tostring(order_lookup[i]) .. '-' .. tostring(order_lookup[tier_index]) .. '-a'
                 }
                 extensions[#extensions + 1] = {
                     type = 'technology',
@@ -54,7 +54,7 @@ for i, v in ipairs(qol_types) do
                     },
                     max_level = tier.technology_count == 0 and 'infinite' or tostring(tier.technology_count),
                     upgrade = true,
-                    order = 'z-z-z-' .. tostring(order_lookup[i]) .. '-' .. tostring(order_lookup[tier_index]) .. '-b'
+                    order = 'qol-research-' .. tostring(order_lookup[i]) .. '-' .. tostring(order_lookup[tier_index]) .. '-b'
                 }
             else
                 extensions[#extensions + 1] = {
@@ -75,7 +75,7 @@ for i, v in ipairs(qol_types) do
                     },
                     max_level = tier.technology_count == 0 and 'infinite' or tostring(tier.technology_count),
                     upgrade = true,
-                    order = 'z-z-z-' .. tostring(order_lookup[i]) .. '-' .. tostring(order_lookup[tier_index])
+                    order = 'qol-research-' .. tostring(order_lookup[i]) .. '-' .. tostring(order_lookup[tier_index])
                 }
             end
         end
