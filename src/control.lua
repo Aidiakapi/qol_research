@@ -36,7 +36,6 @@ function qol:add_modifier(force, fields, modifier)
         else
             data[field] = modifier
         end
-        force[field] = data[field]
     end
 end
 
@@ -70,6 +69,16 @@ function qol:recalculate_all_bonuses()
         end
     end
 
+    -- Apply all forces
+    for _, force in pairs(game.forces) do
+        if force.valid then
+            local data = self.forces[force.name]
+            for key, value in pairs(data) do
+                force[key] = value
+            end
+        end
+    end
+
     -- Remove old modifiers
     --[[ for force_name, modifiers in pairs(old_modifiers) do
         local force = game.forces[force_name]
@@ -83,7 +92,7 @@ end
 
 script.on_event(defines.events.on_research_finished, function (event)
     if not event.research.name:find('^qol-') then return end
-    print(('research %s completed'):format(event.research.name))
+    -- print(('research %s completed'):format(event.research.name))
 
     qol:recalculate_all_bonuses()
 end)
