@@ -14,9 +14,10 @@
     ```
 
     Root functions:
-        flua.index(table)          Creates an index-based iterator (similar to ipairs).
-        flua.keys(table)           Creates a key-based iterator (similar to pairs).
-        flua.range([lower, ]upper) Creates an iterator where both key and value are a sequence of numbers.
+        flua.index(table[, skip])     Creates an index-based iterator (similar to ipairs), optionally skipping initial indices.
+        flua.keys(table)              Creates a key-based iterator (similar to pairs).
+        flua.range([lower, ]upper)    Creates an iterator where both key and value are a sequence of numbers.
+        flua.pattern(string, pattern) Creates an iterator that behaves like string:gsub.
 
     Iterator functions:
         [Meta]
@@ -25,7 +26,9 @@
         
         [Transform]
         api:map(func)         Maps input values to output values.
+        api:flatmap(func)     Maps an input to zero or more output values.
         api:filter(predicate) Removes elements from the iterator that do not satisfy the condition.
+        api:filtermap(func)   Combines filtering with mapping, if the mapping function returns nil, it is filtered.
         api:take(n)           Takes the first n elements from the iterator.
         api:skip(n)           Skips the first n elements from the iterator.
         api:sequence()        Turns the iterator keys into sequential keys (1..n where n is the length).
@@ -36,12 +39,18 @@
         api:count()           Counts the number of elements in the iterator.
         api:sum()             Sums all values in the iterator.
         api:average()         Averages all values in the iterator.
+        api:min()             Returns the minimum value in the iterator.
+        api:max()             Returns the maximum value in the iterator.
 
         [Condition]
         api:all(predicate)    Checks if all values match a condition.
         api:any(predicate)    Checks if any value matches a condition.
         api:contains(object)  Checks if any value equals object.
         api:contains_key(object)  Checks if any key equals the object.
+
+        [Search]
+        api:first([predicate])   Finds the first item satisfying the predicate.
+        api:single([predicate])  Returns the only item satisfying the predicate.
 
         [Collection]
         api:table()           Stores all keys and values of the iterator in a table.
@@ -101,6 +110,49 @@ function api:map(func)
     return setmetatable({ map_next, { func, self[1], self[2] }, self[3], self[4], self[5] }, metatable)
 end
 
+local function flatmap_next(variant, control)
+    while true do
+        -- Currently iterating a mapping
+        if variant[5] then
+            local k, v = variant[5](variant[6], variant[7])
+            if k == nil then
+                variant[5], variant[6], variant[7] = nil, nil, nil
+            else
+                variant[7] = k
+                return variant[4], v
+            end
+        -- Advance the root iterator
+        else
+            local k, v = variant[2](variant[3], variant[4])
+            -- End of iteration
+            if k == nil then
+                return nil
+            end
+            variant[4] = k
+
+            -- Perform the mapping
+            local result = variant[1](v, k)
+            if type(result) == 'table' then
+                if getmetatable(result) == metatable then
+                    variant[5], variant[6], variant[7] = result:iter()
+                else
+                    variant[5], variant[6], variant[7] = ipairs(result)
+                end
+            elseif type(result) ~= 'nil' then
+                error('flatmaps mapping function must return an iterator, a list or nil', 2)
+            end
+        end
+    end
+end
+--- Maps a single value to zero or more output values.
+--- @param  func  function(value, key) => nil|iterator|{ new_values... }
+---               Function that maps a single value to zero or more outputs.
+--- @remark This creates a stateful iterator.
+function api:flatmap(func)
+    if self[5] == 0 then return empty_iter end
+    return setmetatable({ flatmap_next, { func, self[1], self[2], self[3] }, false, true }, metatable)
+end
+
 local function filter_next(invariant, control)
     while true do
         local v1, v2 = invariant[2](invariant[3], control)
@@ -115,6 +167,23 @@ end
 --- @param  predicate  function(value, key) => boolean  Used to test each element.
 function api:filter(predicate)
     return setmetatable({ filter_next, { predicate, self[1], self[2] }, self[3], self[4] }, metatable)
+end
+
+local function filtermap_next(invariant, control)
+    while true do
+        local v1, v2 = invariant[2](invariant[3], control)
+        if v1 == nil then return end
+        v2 = invariant[1](v2, v1)
+        if v2 ~= nil then
+            return v1, v2
+        end
+        control = v1
+    end
+end
+--- Combines filter and map, returning a nil from the mapping function will filter it.
+--- @param  func  function(value, key) => nil|new_value  Used to test each element.
+function api:filtermap(func)
+    return setmetatable({ filtermap_next, { func, self[1], self[2] }, self[3], self[4] }, metatable)
 end
 
 local function take_next(variant, control)
@@ -245,6 +314,26 @@ function api:average()
     return sum / count
 end
 
+--- Computes the minimum of values in the iterator. The iterator must have numerical values.
+--- @remark Returns nil when the iterator is empty.
+function api:min()
+    local m
+    for _, v in self:iter() do
+        if m == nil or v < m then m = v end
+    end
+    return m
+end
+
+--- Computes the maximum of values in the iterator. The iterator must have numerical values.
+--- @remark Returns nil when the iterator is empty.
+function api:max()
+    local m
+    for _, v in self:iter() do
+        if m == nil or v > m then m = v end
+    end
+    return m
+end
+
 -- Conditions
 --- Checks if all of the elements in the collection passes a condition.
 --- @param  predicate  function(value, key) => boolean  Used to test each element.
@@ -288,6 +377,42 @@ function api:contains_key(object)
         end
     end
     return false
+end
+
+-- Search
+function api:first(predicate)
+    if not predicate then
+        for k, v in self:iter() do return k, v end
+        return
+    end
+    for k, v in self:iter() do
+        if predicate(v, k) then
+            return k, v
+        end
+    end
+end
+
+function api:single(predicate)
+    local fk, fv
+    if not predicate then
+        for k, v in self:iter() do
+            if fk then return end
+            fk, fv = k, v
+        end
+        if fk then
+            return fk, fv
+        end
+        return
+    end
+    for k, v in self:iter() do
+        if predicate(v, k) then
+            if fk then return end
+            fk, fv = k, v
+        end
+    end
+    if fk then
+        return fk, fv
+    end
 end
 
 -- Collections
@@ -335,11 +460,17 @@ end
 
 local flua = {}
 
-function flua.index(table)
+function flua.index(table, skip)
+    if table == nil then return empty_iter end
     local iterator, invariant, control = ipairs(table)
+    if skip ~= nil then
+        assert(type(skip) == 'number' and skip >= 0)
+        return flua(iterator, invariant, control + skip, #table - skip)
+    end
     return flua(iterator, invariant, control, #table)
 end
 function flua.keys(table)
+    if table == nil then return empty_iter end
     return flua(pairs(table))
 end
 
@@ -358,10 +489,31 @@ function flua.range(lower, upper)
         upper = lower
         lower = 1
     elseif lower > upper then
-        error('flua.range(lower, upper): lower must be <= upper', 2)
+        return empty_iter
     end
 
     return flua(range_next, upper, lower - 1, upper - lower + 1)
+end
+
+local function pattern_next(variant, control)
+    variant[1] = variant[1] + 1
+    control = control + 1
+    local s, e = string.find(variant[2], variant[3], variant[1])
+    if not s then return end
+    variant[1] = e
+    return control, string.sub(variant[2], s, e)
+end
+--- Creates an iterator that matches a pattern in a string.
+--- The returned iterator contains has index as key and the
+--- match as value.
+--- @param  string  string   The string to perform matching on.
+--- @param  string  pattern  The pattern to match on the string.
+--- @remark Does NOT support captures in the pattern.
+--- Example:
+--- print(table.concat(flua.pattern('hello world this is a string', '%a+ +%a+'):table(), ', '))
+--- prints: 'hello world, this is, a string'
+function flua.pattern(string, pattern)
+    return flua(pattern_next, { 0, string, pattern }, 0, nil, true)
 end
 
 return setmetatable(flua, {
