@@ -1,523 +1,951 @@
---[[
+--[=[
 
-    Small function programming library written by Aidiakapi.
+    Flua
+    Library adds a functional iterator type.
     Version 0.1.0
 
-    See the documentation in the code for specific usage of functions.
+    Types:
+      flua
+        Utilities to create source iterators.
+      iterator
+        The primary object to perform actions upon.
+      list
+        A sequential table (table where all keys of type number
+        are consective in the range [1, n]).
+      integer
+        A whole number.
+      any boolean
+        Any value that will be tested for true-ness. Does not
+        have to be of type 'boolean'.
 
-    Example:
-    ```lua
-    local flua = require('flua')
-    local data = flua.range(5, 10):map(function (v) return v  * 2 end):concat(flua.range(4)):list()
-    print(table.concat(data, ', '))
-    -- prints: 10, 12, 14, 16, 18, 20, 1, 2, 3, 4
-    ```
+    Terms:
+      iterator
+        A Flua iterator.
+      native Lua iterator
+        A stateful or stateless iterator for usage in the for-in loop.
+      width
+        Refers to the width of the n-tuple that is iterated over.
+      element
+        A single record in an iterator.
+      value
+        A single value inside an element.
+      size
+        Synonymous to count.
+      invariant
+        A value that does not change throughout iteration.
+      control
+        A value that is modified throughout iteration.
 
-    Root functions:
-        flua.index(table[, skip])     Creates an index-based iterator (similar to ipairs), optionally skipping initial indices.
-        flua.keys(table)              Creates a key-based iterator (similar to pairs).
-        flua.range([lower, ]upper)    Creates an iterator where both key and value are a sequence of numbers.
-        flua.pattern(string, pattern) Creates an iterator that behaves like string:gsub.
+    Functions:
+      flua.ipairs(list)
+      flua.ivalues(list)
+      flua.pairs(table)
+      flua.values(table)
+      flua.range([lower, ]upper)
+      flua.infinite()
+      flua.duplicate(n, value_1[, ..., value_n])
 
-    Iterator functions:
-        [Meta]
-        api:iter()            Returns the iterator that can be used in the `for ... in` loop.
-        api:is_stateful()     Returns whether the iterator is stateful.
-        
-        [Transform]
-        api:map(func)         Maps input values to output values.
-        api:flatmap(func)     Maps an input to zero or more output values.
-        api:filter(predicate) Removes elements from the iterator that do not satisfy the condition.
-        api:filtermap(func)   Combines filtering with mapping, if the mapping function returns nil, it is filtered.
-        api:take(n)           Takes the first n elements from the iterator.
-        api:skip(n)           Skips the first n elements from the iterator.
-        api:sequence()        Turns the iterator keys into sequential keys (1..n where n is the length).
-        api:concat(iter)      Combines two iterators to create one where self is followed by iter.
+      iterator:iter()
+      iterator:list()
+      iterator:table()
 
-        [Aggregation]
-        api:reduce(func, initial_value)  Performs a left-fold on the iterator elements (aggregation).
-        api:count()           Counts the number of elements in the iterator.
-        api:sum()             Sums all values in the iterator.
-        api:average()         Averages all values in the iterator.
-        api:min()             Returns the minimum value in the iterator.
-        api:max()             Returns the maximum value in the iterator.
+      iterator:map(func[, new_width])
+      iterator:flatmap(func[, new_width])
+      iterator:filter(predicate)
+      iterator:filtermap(func[, new_width])
+      iterator:distinct()
 
-        [Condition]
-        api:all(predicate)    Checks if all values match a condition.
-        api:any(predicate)    Checks if any value matches a condition.
-        api:contains(object)  Checks if any value equals object.
-        api:contains_key(object)  Checks if any key equals the object.
+      iterator:concat(iter)
+      iterator:zip(iter)
 
-        [Search]
-        api:first([predicate])   Finds the first item satisfying the predicate.
-        api:single([predicate])  Returns the only item satisfying the predicate.
+      iterator:take(n)
+      iterator:skip(n)
 
-        [Collection]
-        api:table()           Stores all keys and values of the iterator in a table.
-        api:list()            Stores all values of the iterator in a list (sequential table).
-        api:set()             Stores all keys with unique values of the iterator in a table.
-        api:distinct()        Stores all unique values of the iterator in a list (sequential table).
+      iterator:reduce(aggregator, initial_value_1[, ..., initial_value_n])
+      iterator:count()
+      iterator:sum()
+      iterator:average()
+      iterator:min()
+      iterator:max()
+
+      iterator:all(predicate)
+      iterator:any(predicate)
+      iterator:contains(value_1[, ..., value_n])
+    
+    Detailed information about each function is found in the source code.
+    All documentation is contained in comment blocks starting with --[=[
 
     ISC License
 
-]]
-local metatable, api = {}, {}
-metatable.__index = api
+]=]
 
--- Meta
-local function empty_next() -- Represents an empty iterator
-    return
+local flua, api = {}, {}
+local iter_mt = { __index = api }
+-- Use the maximum integer value of 32-bit float or 64-bit float
+local MAXIMUM_INT_VALUE = ((16777216 + 1) == 16777216) and 16777216 or 9007199254740992
+local lua_assert, assert = assert
+if FLUA_DISABLE_ASSERT then
+    assert = function () end
+else
+    assert = lua_assert
 end
-local empty_iter = setmetatable({ empty_next, false, false, false, 0 }, metatable)
 
-local function iter_copy(variant)
+
+local function deep_copy(value)
     local copy = {}
-    for k, v in pairs(variant) do
-        if type(v) == 'table' then
-            copy[k] = iter_copy(v)
+    for key, subvalue in pairs(value) do
+        if key == '_external' then
+            copy._external = subvalue
         else
-            copy[k] = v
+            if type(subvalue) == 'table' then
+                copy[key] = deep_copy(subvalue)
+            else
+                copy[key] = subvalue
+            end
         end
     end
     return copy
 end
 
---- Call to create an iterator for usage with the `for ... in` loop.
-function api:iter()
-    if self[4] then
-        return self[1], iter_copy(self[2]), self[3]
-    end
-    return self[1], self[2], self[3]
+local function unpack_n(n, t, i)
+    if n == 1 then return t[i] end
+    return t[i], unpack_n(n - 1, t, i + 1)
 end
 
---- Checks whether the iterator that would be returned by `:iter()` is stateful or not.
---- Stateful iterators may only be used once in a `for ... in` loop, whilst stateless
---- iterator can be reused.
-function api:is_stateful()
-    return self[4]
-end
-
--- Transforms
-local function map_next(invariant, control)
-    local v1, v2 = invariant[2](invariant[3], control)
-    if v1 == nil then return end
-    return v1, invariant[1](v2, v1)
-end
---- Maps values from a previous state to a new state.
---- @param  func  function(value, key) => new_value
----               Function that maps original values to new values.
-function api:map(func)
-    return setmetatable({ map_next, { func, self[1], self[2] }, self[3], self[4], self[5] }, metatable)
-end
-
-local function flatmap_next(variant, control)
-    while true do
-        -- Currently iterating a mapping
-        if variant[5] then
-            local k, v = variant[5](variant[6], variant[7])
-            if k == nil then
-                variant[5], variant[6], variant[7] = nil, nil, nil
-            else
-                variant[7] = k
-                return variant[4], v
-            end
-        -- Advance the root iterator
-        else
-            local k, v = variant[2](variant[3], variant[4])
-            -- End of iteration
-            if k == nil then
-                return nil
-            end
-            variant[4] = k
-
-            -- Perform the mapping
-            local result = variant[1](v, k)
-            if type(result) == 'table' then
-                if getmetatable(result) == metatable then
-                    variant[5], variant[6], variant[7] = result:iter()
-                else
-                    variant[5], variant[6], variant[7] = ipairs(result)
-                end
-            elseif type(result) ~= 'nil' then
-                error('flatmaps mapping function must return an iterator, a list or nil', 2)
-            end
+local vs = setmetatable({}, {
+    __index = function (self, index)
+        assert(type(index) == 'number' and index >= 1)
+        local vs = {}
+        for i = 1, index do
+            vs[i * 3 - 2] = 'v'
+            vs[i * 3 - 1] = i
+            vs[i * 3] = ', '
         end
+        vs[#vs] = nil
+        vs = table.concat(vs)
+        rawset(self, index, vs)
+        return vs
     end
-end
---- Maps a single value to zero or more output values.
---- @param  func  function(value, key) => nil|iterator|{ new_values... }
----               Function that maps a single value to zero or more outputs.
---- @remark This creates a stateful iterator.
-function api:flatmap(func)
-    if self[5] == 0 then return empty_iter end
-    return setmetatable({ flatmap_next, { func, self[1], self[2], self[3] }, false, true }, metatable)
+})
+
+local iter_return_n = setmetatable({}, {
+    __index = function (self, index)
+        assert(type(index) == 'number' and index >= 1)
+        local vs = vs[index]
+        local fn = load([[return function (invariant)
+            local self, control = invariant._self, invariant._control
+            local current_control = control[self._index]
+            invariant._self = self._parent
+            local new_control, ]] .. vs .. [[ = self._iterator(invariant, self._invariant, current_control)
+            invariant._self = self
+            control[self._index] = new_control
+            return ]] .. vs .. [[
+        end]], 'iter_return_n', 't')()
+        rawset(self, index, fn)
+        return fn
+    end
+})
+
+local function iter_next(invariant)
+    return iter_return_n[invariant._self._width](invariant)
 end
 
-local function filter_next(invariant, control)
-    while true do
-        local v1, v2 = invariant[2](invariant[3], control)
-        if v1 == nil then return end
-        if invariant[1](v2, v1) then
-            return v1, v2
-        end
-        control = v1
-    end
-end
---- Filters an iterator so it only contains elements matching a condition.
---- @param  predicate  function(value, key) => boolean  Used to test each element.
-function api:filter(predicate)
-    return setmetatable({ filter_next, { predicate, self[1], self[2] }, self[3], self[4] }, metatable)
+local function mkiter(parent, width, size, iterator, invariant, control)
+    local t = {
+        _parent = parent,
+        _index = parent and (parent._index + 1) or 1,
+        _width = width,
+        _size = size,
+        _iterator = iterator,
+        _invariant = invariant,
+        _control = control
+    }
+    return setmetatable(t, iter_mt)
 end
 
-local function filtermap_next(invariant, control)
-    while true do
-        local v1, v2 = invariant[2](invariant[3], control)
-        if v1 == nil then return end
-        v2 = invariant[1](v2, v1)
-        if v2 ~= nil then
-            return v1, v2
-        end
-        control = v1
+local function empty_next() end
+local empty_iter = setmetatable({}, {
+    __index = function (self, index)
+        local iter = mkiter(nil, index, 0, empty_next, nil, nil)
+        rawset(self, index, iter)
+        return iter
     end
-end
---- Combines filter and map, returning a nil from the mapping function will filter it.
---- @param  func  function(value, key) => nil|new_value  Used to test each element.
-function api:filtermap(func)
-    return setmetatable({ filtermap_next, { func, self[1], self[2] }, self[3], self[4] }, metatable)
-end
+})
 
-local function take_next(variant, control)
-    if variant[1] >= variant[2] then return end
-    variant[1] = variant[1] + 1
-    return variant[3](variant[4], control)
-end
---- Takes the first n elements from the iterator.
---- @param  n  number  The maximum amount of elements to take.
---- @remark This creates a stateful iterator.
-function api:take(n)
-    local new_length
-    if self[5] then
-        new_length = self[5] < n and self[5] or n
-    end
-    if new_length == 0 then
-        return empty_iter
-    end
-    return setmetatable({ take_next, { 0, n, self[1], self[2] }, self[3], true, new_length }, metatable)
-end
+--[=[
+    flua.ipairs(list) => iterator
+    Creates an 2-wide iterator with indices and values similar to ipairs.
 
-local function skip_next(invariant, control)
-    -- If we're at the start
-    if control == invariant[1] then
-        -- Skip n elements
-        for i = 1, invariant[2] do
-            control = invariant[3](invariant[4], control)
-            if control == nil then return end
-        end
-    end
-    return invariant[3](invariant[4], control)
-end
---- Skips the first n elements from the iterator.
---- @param  n  number The maximum amount of elements to skip.
-function api:skip(n)
-    local new_length
-    if self[5] then
-        if self[5] <= n then
-            return empty_iter
-        end
-        new_length = self[5] - n
-    end
-    return setmetatable({ skip_next, { self[3], n, self[1], self[2] }, self[3], self[4], new_length }, metatable)
-end
-
-local function sequence_next(variant, control)
+    Params:
+      list  sequential table
+        The list to iterate over.
+    
+    Returns:
+      An iterator bound to the list.
+    
+    Remark:
+      The list that is bound to must not be mutated.
+]=]
+local function ipairs_next(parent, invariant, control)
     control = control + 1
-    local k, v = variant[1](variant[2], variant[3])
-    variant[3] = k
-    if k == nil then return end
-    return control, v
-end
---- Changes all keys to become a sequence (1..n).
---- @remark This creates a stateful iterator.
-function api:sequence()
-    if self[5] == 0 then return empty_iter end
-    return setmetatable({ sequence_next, { self[1], self[2], self[3] }, 0, true, self[5] }, metatable)
+    if control > #invariant then return end
+    return control, control, invariant[control]
 end
 
-local function concat_next(variant)
-    if not variant[1] then
-        local k, v = variant[2](variant[3], variant[4])
-        if k ~= nil then
-            variant[4] = k
-            return k, v
+function flua.ipairs(list)
+    return mkiter(nil, 2, #list, ipairs_next, list, 0)
+end
+
+--[=[
+    flua.ivalues(list) => iterator
+    Creates a 1-wide iterator with solely the values from ipairs.
+
+    Params:
+      list  sequential table
+        The list to iterate over.
+    
+    Returns:
+      An iterator bound to the list.
+    
+    Remark:
+      The list that is bound to must not be mutated.
+]=]
+local function ivalues_next(parent, invariant, control)
+    control = control + 1
+    if control > #invariant then return end
+    return control, invariant[control]
+end
+
+function flua.ivalues(list)
+    return mkiter(nil, 1, #list, ivalues_next, list, 0)
+end
+
+--[=[
+    flua.pairs(table) => iterator
+    Creates a 2-wide iterator with the keys and values from pairs.
+
+    Params:
+      table  any table
+        The table to iterate.
+    
+    Returns:
+      An iterator bound to the table.
+    
+    Remark:
+      The table that is bound to must not be mutated.
+]=]
+local function pairs_next(parent, invariant, control)
+    local k, v = next(invariant, control)
+    return k, k, v
+end
+function flua.pairs(table)
+    return mkiter(nil, 2, nil, pairs_next, table, nil)
+end
+
+--[=[
+    flua.values(table) => iterator
+    Creates a 1-wide iterator with solely the values from pairs.
+
+    Params:
+      table  any table
+        The table to iterate.
+    
+    Returns:
+      An iterator bound to the table.
+    
+    Remark:
+      The table that is bound to must not be mutated.
+]=]
+local function values_next(parent, invariant, control)
+    return next(invariant, control)
+end
+function flua.values(table)
+    return mkiter(nil, 1, nil, values_next, table, nil)
+end
+
+--[=[
+    flua.range([lower, ]upper) => iterator
+    Creates a 1-wide iterator ranging from lower to upper.
+
+    Params:
+      lower  integer
+        Optional. Specifies the lower bound. Default 1.
+      upper  integer
+        Specifies the inclusive upper bound.
+    
+    Returns:
+      An iterator in range [lower, upper].
+]=]
+local function range_next(parent, invariant, control)
+    if control > invariant then return end
+    return control + 1, control
+end
+function flua.range(lower, upper)
+    if not upper then
+        lower, upper = 1, lower
+    end
+    if upper < lower then
+        return empty_iter[1]
+    end
+    return mkiter(nil, 1, upper - lower + 1, range_next, upper, lower)
+end
+
+--[=[
+    flua.infinite() => iterator
+    Creates an indefinitely continuing iterator.
+
+    Returns:
+      A 1-wide iterator starting at 1 incrementing by 1 indefinitely.
+]=]
+local function infinite_next(parent, invariant, control)
+    control = control + 1
+    return control, control
+end
+local flua_infinite = mkiter(nil, 1, MAXIMUM_INT_VALUE, infinite_next, nil, 0)
+function flua.infinite()
+    return flua_infinite
+end
+
+--[=[
+    flua.duplicate(n, value_1[, ..., value_w])
+    Repeats an element with values [1..w] n times.
+
+    Returns:
+      An w-wide n-size iterator where each element is value_[1..w].
+]=]
+local function duplicate_next(parent, invariant, control)
+    control = control + 1
+    if control <= invariant.n then
+        return control, unpack_n(invariant.w, invariant, 1)
+    end
+end
+function flua.duplicate(n, ...)
+    local w = select('#', ...)
+    return mkiter(nil, w, n, duplicate_next, { n = n, w = w, ... }, 0)
+end
+
+--[=[
+    iterator:iter() => native Lua iterator, invariant, control
+    Creates an iterator for use with for-in loops.
+
+    Returns:
+      A native Lua iterator.
+]=]
+function api:iter()
+    local control = {}
+    for i = 1, self._index do control[i] = false end
+    local current = self
+    for i = self._index, 1, -1 do
+        local current_control = current._control
+        if type(current_control) == 'table' then
+            control[i] = deep_copy(current_control)
+        else
+            control[i] = current_control
         end
-        variant[1] = true
+        current = current._parent
     end
-    local k, v = variant[5](variant[6], variant[7])
-    if k == nil then return end
-    variant[7] = k
-    return k, v
+
+    return iter_next, { _control = control, _self = self }
 end
---- Concatenates an iterator to the current iterator
---- @param  iter  Iterator returned by calling `flua`, `flua.index` or `flua.keys`.
---- @remark This creates a stateful iterator.
+
+--[=[
+    iterator:list() => list
+    Creates a list from a 1-wide iterator.
+
+    Returns:
+      The new list.
+]=]
+function api:list()
+    assert(self._width == 1, 'list() can only be called on 1-wide iterators')
+    local list = {}
+    for v in self:iter() do
+        list[#list + 1] = v
+    end
+    return list
+end
+
+--[=[
+    iterator:table() => table
+    Creates a table from a 2-wide iterator.
+
+    Returns:
+      A table where the keys are the first value in each element
+      and the values are the second value in each element.
+
+    Remark:
+      If there are duplicate keys, the last value in the
+      iterator is assigned.
+]=]
+function api:table()
+    assert(self._width == 2, 'table() can only be called on 2-wide iterators')
+    local table = {}
+    for k, v in self:iter() do
+        table[k] = v
+    end
+    return table
+end
+
+--[=[
+    iterator:map(func[, new_width]) => iterator
+    Maps all input values in an iterator to output values.
+
+    Params:
+      func  (in_1, ..., in_width) => out_1, ..., out_new_width
+        Maps input values to output values.
+        Remark, out_1 MUST NOT be nil, if it is, the behavior is undefined.
+      new_width  integer
+        Optional. The output width of the iterator. Default: input width.
+
+    Returns:
+      New iterator with the mapping applied.
+]=]
+local map_next_n = setmetatable({}, {
+    __index = function (self, index)
+        local vs = vs[index]
+        local fn = load([[return function (parent, invariant)
+            local ]] .. vs .. [[ = iter_next(parent)
+            if v1 == nil then return end
+            return nil, invariant(]] .. vs .. [[)
+        end]], 'map_next_n', 't', { iter_next = iter_next })()
+        rawset(self, index, fn)
+        return fn
+    end
+})
+function api:map(func, new_width)
+    return mkiter(self, new_width or self._width, self._size, map_next_n[self._width], func, nil)
+end
+
+--[=[
+    iterator:flatmap(func[, new_width]) => iterator
+    Maps all input values to zero or more output values.
+    
+    Params:
+      func  (in_1, ..., in_width) => iterator { width = new_width }
+        Maps input values to zero or more output values.
+        Remark, each returned iterator MUST BE new_width wide, otherwise
+        the behavior is undefined.
+      new_width  integer
+        Optional. The output width of the iterator. Default: input width.
+    
+    Returns:
+      New iterator with the mapping and flattening applied.
+]=]
+local flatmap_next_n = setmetatable({}, {
+    __index = function (self, old_width)
+        local tbl = setmetatable({}, {
+            __index = function (self, new_width)
+                local vs_old = vs[old_width]
+                local vs_new = vs[new_width]
+                local fn = load(([[return function (parent, invariant, control)
+                    while true do
+                        if control[1] == nil then
+                            local %s = iter_next(parent)
+                            -- End of parent iterator
+                            if v1 == nil then return end
+                            local iter = invariant(%s)
+                            assert(iter._width == %d, 'flatmap: invalid iterator width, expected %d')
+                            control[1], control[2], control[3] = iter:iter()
+                        end
+                        -- Iterate child
+                        local %s = control[1](control[2], control[3])
+                        control[3] = v1
+                        if v1 ~= nil then
+                            return control, %s
+                        end
+                        control[1], control[2], control[3] = nil, nil, nil
+                    end
+                end]]):format(vs_old, vs_old, new_width, new_width, vs_new, vs_new),
+                'flatmap_next_n', 't', { assert = assert, iter_next = iter_next })()
+                rawset(self, new_width, fn)
+                return fn
+            end
+        })
+        rawset(self, old_width, tbl)
+        return tbl
+    end
+})
+function api:flatmap(func, new_width)
+    new_width = new_width or self._width
+    return mkiter(self, new_width, nil, flatmap_next_n[self._width][new_width], func, {})
+end
+
+--[=[
+    iterator:filter(predicate) => iterator
+    Checks every value with a predicate to see if it should be preserved.
+
+    Params:
+      predicate  (in_1, ..., in_width) => any boolean
+        A predicate determining whether the current value should be kept.
+        
+    Returns:
+      New iterator with the filtering applied.
+]=]
+local filter_next_n = setmetatable({}, {
+    __index = function (self, index)
+        local vs = vs[index]
+        local fn = load([[return function(parent, invariant)
+            while true do
+                local ]] .. vs .. [[ = iter_next(parent)
+                if v1 == nil then return end
+                if invariant(]] .. vs .. [[) then
+                    return nil, ]] .. vs .. [[
+                end
+            end
+        end]], 'filter_next_n', 't', { iter_next = iter_next })()
+        rawset(self, index, fn)
+        return fn
+    end
+})
+function api:filter(predicate)
+    return mkiter(self, self._width, nil, filter_next_n[self._width], predicate, nil)
+end
+
+--[=[
+    iterator:filtermap(func[, new_width]) => iterator
+    Performs mapping and filtering at the same. A value mapped to nil is filtered.
+
+    Params:
+      func  (in_1, ..., in_width) => out_1, ..., out_new_width
+        Maps input values to output values.
+        If out_1 is nil, the value is filtered.
+      new_width  integer
+        Optional. The output width of the iterator. Default: input width.
+
+    Returns:
+      New iterator with the mapping and filtering applied.
+]=]
+local filtermap_next_n = setmetatable({}, {
+    __index = function (self, old_width)
+        local tbl = setmetatable({}, {
+            __index = function (self, new_width)
+                local vs_old = vs[old_width]
+                local vs_new = vs[new_width]
+                local fn = load(([[return function (parent, invariant)
+                    while true do
+                        local %s = iter_next(parent)
+                        if v1 == nil then return end
+                        do
+                            local %s = invariant(%s)
+                            if v1 ~= nil then
+                                return nil, %s
+                            end
+                        end
+                    end
+                end]]):format(vs_old, vs_new, vs_old, vs_new),
+                'filtermap_next_n', 't', { iter_next = iter_next })()
+                rawset(self, new_width, fn)
+                return fn
+            end
+        })
+        rawset(self, old_width, tbl)
+        return tbl
+    end
+})
+function api:filtermap(func, new_width)
+    new_width = new_width or self._width
+    return mkiter(self, new_width, nil, filtermap_next_n[self._width][new_width], func, nil)
+end
+
+--[=[
+    iterator:distinct() => iterator
+    Keeps unique elements from a 1-wide iterator.
+
+    Returns:
+      An iterator with only unique elements.
+]=]
+local function distinct_next_1(parent, invariant, control)
+    while true do
+        local v1 = iter_next(parent)
+        if v1 == nil then return end
+        if not control[v1] then
+            control[v1] = true
+            return control, v1
+        end
+    end
+end
+function api:distinct()
+    assert(self._width == 1, 'wide iterators are not supported')
+    return mkiter(self, self._width, nil, distinct_next_1, nil, {})
+end
+
+--[=[
+    iterator:concat(iter) => iterator
+    Combines the elements from two iterators.
+
+    Params:
+      iter  iterator
+        The iterator whose elements follow the elements in
+        the current iterator. Must be the same width.
+    
+    Returns:
+      A new iterator combining the two iterators.
+]=]
+local concat_next_n = setmetatable({}, {
+    __index = function (self, index)
+        local vs = vs[index]
+        local fn = load(([[return function (parent, invariant, control)
+            -- Iterate self
+            if not control then
+                local %s = iter_next(parent)
+                if v1 ~= nil then
+                    return nil, %s
+                end
+                -- Move to second iterator
+                control = { invariant:iter() }
+            end
+            local %s = control[1](control[2], control[3])
+            control[3] = v1
+            return control, %s
+        end]]):format(vs, vs, vs, vs), 'concat_next_n', 't', { iter_next = iter_next })()
+        rawset(self, index, fn)
+        return fn
+    end
+})
 function api:concat(iter)
-    local new_length
-    if self[5] and iter[5] then
-        new_length = self[5] + iter[5]
+    local new_size
+    if self._size and iter._size then
+        new_size = self._size + iter._size
     end
-    return setmetatable({ concat_next, { false, self[1], self[2], self[3], iter[1], iter[2], iter[3] }, nil, true, new_length }, metatable)
+    if new_size == 0 then return empty_iter[self._width] end
+    return mkiter(self, self._width, new_size, concat_next_n[self._width], iter, nil)
 end
 
--- Aggregations
---- Performs left-folding on the iterator.
---- @param  func  function(accumulator, value, key) => new_accumulator
----               Executed for every element in the iterator. For the first element
----               the value of accumulator is set to initial_value, for subsequent
----               elements it is the result of calling func on the preceding element.
---- @param  initial_value  any  The initial value of the accumulator
+--[=[
+    iterator:zip(iter) => iterator
+    Combines the values in each element from two iterators.
 
-function api:reduce(func, initial_value)
-    for v1, v2 in self:iter() do
-        initial_value = func(initial_value, v2, v1)
+    Params:
+      iter  iterator
+        The iterator whose values for each element are appended
+        to the current iterator's element.
+    
+    Returns:
+      A new iterator composing the two iterators.
+
+    Remark:
+      The returned iterator halts when the first of the two
+      iterators halts.
+]=]
+local zip_next_n = setmetatable({}, {
+    __index = function (self, index)
+        local vs = vs[index]
+        local fn = load(([[local function next_zip_store(control, %s, s1, ...)
+            if s1 == nil then return end
+            control[3] = s1
+            return control, %s, s1, ...
+        end
+        
+        return function (parent, invariant, control)
+            local %s = iter_next(parent)
+            if v1 == nil then return end
+            return next_zip_store(control, %s, control[1](control[2], control[3]))
+        end]]):format(vs, vs, vs, vs), 'zip_next_n', 't', { iter_next = iter_next })()
+        rawset(self, index, fn)
+        return fn
     end
-    return initial_value
+})
+
+function api:zip(iter)
+    local new_size
+    if self._size and iter._size then
+        new_size = math.min(self._size, iter._size)
+    end
+    return mkiter(self, self._width + iter._width, new_size, zip_next_n[self._width], nil, { iter:iter() })
 end
 
---- Counts the amount of items in the iterator.
+--[=[
+    iterator:take(n) => iterator
+    Takes the first n elements from the iterator.
+
+    Params:
+      n  integer
+        The amount of elements to take. If the source
+        iterator is shorter, it will stop early.
+        When 0, an empty iterator is returned.
+    
+    Returns:
+      New iterator that's limited to n elements.
+]=]
+local function take_next_n(parent, invariant, control)
+    control = control + 1
+    if control > invariant then return end
+    return control, iter_next(parent)
+end
+function api:take(n)
+    if n == 0 then return empty_iter[self._width] end
+    local new_size
+    if self._size then
+        if self._size <= n then
+            new_size = self._size
+        else
+            new_size = n
+        end
+    end
+    return mkiter(self, self._width, new_size, take_next_n, n, 0)
+end
+
+--[=[
+    iterator:skip(n) => iterator
+    Skips the first n elements from the iterator.
+
+    Params:
+      n  integer
+        The amount of elements to skip. If the source
+        iterator is shorter, an empty iterator is returned.
+    
+    Returns:
+      New iterator that skips the first n elements.
+]=]
+local function skip_next_n(parent, invariant, control)
+    if not control then
+        for i = 1, invariant do
+            iter_next(parent)
+        end
+    end
+    return true, iter_next(parent)
+end
+function api:skip(n)
+    local new_size
+    if self._size then
+        new_size = self._size - n
+        if new_size <= 0 then return empty_iter[self._width] end
+    end
+    return mkiter(self, self._width, new_size, skip_next_n, n, false)
+end
+
+--[=[
+    iterator:reduce(aggregator, initial_value_1[, ..., initial_value_n])
+        => result_1, ..., result_n
+    Aggregates all data in the iterator into 1 or more result values.
+
+    Params:
+      aggregator  (accumulator_1, ..., accumulator_n, in_1, ..., in_width)
+                  => new_accumulator_1, ..., new_accumulator_n
+        A function that runs for each element in the iterator, the
+        accumulator value(s) for the first element is initial_value_[1..n],
+        for subsequent elements it is the result of the previous invocation
+        of aggregator.
+      initial_value_[1..n]  any
+        The initial value(s) to use in the aggregation.
+
+    Returns:
+      The final value after the aggregation of all elements of each accumulator.
+    
+    Remark:
+      Performs iteration.
+]=]
+local reduce_n = setmetatable({}, {
+    __index = function (self, index)
+        local vs = vs[index]
+        local fn = load(([[return function (self, aggregator, %s)
+            local iterator, invariant, control = self:iter()
+            local function aggregator_wrapper(%s, c, ...)
+                if c == nil then return false, %s end
+                control = c
+                return true, aggregator(%s, c, ...)
+            end
+            local not_done = true
+            while not_done  do
+                not_done, %s = aggregator_wrapper(%s, iterator(invariant, control))
+            end
+            return %s
+        end]]):format(vs, vs, vs, vs, vs, vs, vs), 'reduce_n', 't')()
+        rawset(self, index, fn)
+        return fn
+    end
+})
+function api:reduce(aggregator, ...)
+    return reduce_n[select('#', ...)](self, aggregator, ...)
+end
+
+--[=[
+    iterator:count() => integer
+    Gets the element count in the iterator.
+
+    Returns:
+      The amount of elements in the iterator.
+
+    Remark:
+      May perform iteration.
+]=]
 function api:count()
-    -- self:reduce(function (acc) return acc + 1 end, 0)
-    if self[5] then return self[5] end
-    local c = 0
+    if self._size then return self._size end
+    local count = 0
     for _ in self:iter() do
-        c = c + 1
+        count = count + 1
     end
-    return c
+    return count
 end
 
---- Computes the sum of all values in the iterator. The iterator must have numerical values.
+--[=[
+    iterator:sum() => number
+    Sums the values in the 1-wide numeric iterator.
+
+    Returns:
+      The sum of the values.
+    
+    Remark:
+      Performs iteration.
+]=]
 function api:sum()
-    -- self:reduce(function (acc, value) return acc + value end, 0)
-    local s = 0
-    for _, v in self:iter() do
-        s = s + v
+    assert(self._width == 1, 'sum() can only be called on 1-wide iterators')
+    local sum = 0
+    for v in self:iter() do
+        sum = sum + v
     end
-    return s
+    return sum
 end
 
---- Computes the average of values in the iterator. The iterator must have numerical values.
+--[=[
+    iterator:average() => number
+    Averages the values in the 1-wide numeric iterator.
+
+    Returns:
+      The average of the values.
+    
+    Remark:
+      Performs iteration.
+]=]
 function api:average()
-    if self[5] then return self:sum() / self[5] end
-    local sum, count = 0, 0
-    for _, v in self:iter() do
-        sum, count = sum + v, count + 1
+    assert(self._width == 1, 'average() can only be called on 1-wide iterators')
+    if self._size then
+        return self:sum() / self._size
+    end
+    local count, sum = 0, 0
+    for v in self:iter() do
+        count, sum = count + 1, sum + v
     end
     return sum / count
 end
 
---- Computes the minimum of values in the iterator. The iterator must have numerical values.
---- @remark Returns nil when the iterator is empty.
+--[=[
+    iterator:min() => number
+    Gets the smallest value from 1-wide numeric iterator.
+
+    Returns:
+      The smallest value or nil if the iterator is empty.
+    
+    Remark:
+      Performs iteration.
+]=]
 function api:min()
-    local m
-    for _, v in self:iter() do
-        if m == nil or v < m then m = v end
+    assert(self._width == 1, 'min() can only be called on 1-wide iterators')
+    local iterator, invariant, control = self:iter()
+    control = iterator(invariant, control)
+    local min = control
+    if control ~= nil then
+        while true do
+            control = iterator(invariant, control)
+            if control == nil then break end
+            if control < min then min = control end
+        end
     end
-    return m
+    return min
 end
 
---- Computes the maximum of values in the iterator. The iterator must have numerical values.
---- @remark Returns nil when the iterator is empty.
+--[=[
+    iterator:max() => number
+    Gets the largest value from 1-wide numeric iterator.
+
+    Returns:
+      The largest value or nil if the iterator is empty.
+    
+    Remark:
+      Performs iteration.
+]=]
 function api:max()
-    local m
-    for _, v in self:iter() do
-        if m == nil or v > m then m = v end
+    assert(self._width == 1, 'max() can only be called on 1-wide iterators')
+    local iterator, invariant, control = self:iter()
+    control = iterator(invariant, control)
+    local max = control
+    if control ~= nil then
+        while true do
+            control = iterator(invariant, control)
+            if control == nil then break end
+            if control > max then max = control end
+        end
     end
-    return m
+    return max
 end
 
--- Conditions
---- Checks if all of the elements in the collection passes a condition.
---- @param  predicate  function(value, key) => boolean  Used to test each element.
+local function invoke_predicate(predicate, v1, ...)
+    if v1 == nil then return nil end
+    return v1, predicate(v1, ...)
+end
+
+--[=[
+    iterator:all(predicate) => boolean
+    Checks if all elements in the iterator abide by the condition.
+
+    Params:
+      predicate  (value_1, ..., value_width) => any boolean
+        A function that checks a provided condition.
+    
+    Returns:
+      A boolean indicating if the condition was met on all elements.
+]=]
 function api:all(predicate)
-    for v1, v2 in self:iter() do
-        if not predicate(v2, v1) then
-            return false
-        end
+    local iterator, invariant, control = self:iter()
+    local result
+    while true do
+        control, result = invoke_predicate(predicate, iterator(invariant, control))
+        if control == nil then return true end
+        if not result then return false end
     end
-    return true
 end
 
---- Checks if any of the elements in the collection passes a condition.
---- @param  predicate  function(value, key) => boolean  Used to test each element.
+--[=[
+    iterator:all(predicate) => boolean
+    Checks if any element in the iterator abide by the condition.
+
+    Params:
+      predicate  (value_1, ..., value_width) => any boolean
+        A function that checks a provided condition.
+    
+    Returns:
+      A boolean indicating if the condition was met on any element.
+]=]
 function api:any(predicate)
-    for v1, v2 in self:iter() do
-        if predicate(v2, v1) then
-            return true
+    local iterator, invariant, control = self:iter()
+    local result
+    while true do
+        control, result = invoke_predicate(predicate, iterator(invariant, control))
+        if control == nil then return false end
+        if result then return true end
+    end
+end
+
+local contains_n = setmetatable({}, {
+    __index = function (self, index)
+        local vs = vs[index]
+        local es = vs:gsub('v', 'e')
+        local condition = {}
+        for i = 1, index do
+            condition[#condition + 1] = 'e'
+            condition[#condition + 1] = i
+            condition[#condition + 1] = ' == '
+            condition[#condition + 1] = 'v'
+            condition[#condition + 1] = i
+            condition[#condition + 1] = ' and '
         end
-    end
-    return false
-end
-
---- Checks if any of the values equals object.
---- @param  object  any  The object to check for.
-function api:contains(object)
-    for _, v in self:iter() do
-        if v == object then
-            return true
-        end
-    end
-    return false
-end
-
---- Checks if any of the keys equals object.
---- @param  object  any  The object to check for.
-function api:contains_key(object)
-    for v in self:iter() do
-        if v == object then
-            return true
-        end
-    end
-    return false
-end
-
--- Search
-function api:first(predicate)
-    if not predicate then
-        for k, v in self:iter() do return k, v end
-        return
-    end
-    for k, v in self:iter() do
-        if predicate(v, k) then
-            return k, v
-        end
-    end
-end
-
-function api:single(predicate)
-    local fk, fv
-    if not predicate then
-        for k, v in self:iter() do
-            if fk then return end
-            fk, fv = k, v
-        end
-        if fk then
-            return fk, fv
-        end
-        return
-    end
-    for k, v in self:iter() do
-        if predicate(v, k) then
-            if fk then return end
-            fk, fv = k, v
-        end
-    end
-    if fk then
-        return fk, fv
-    end
-end
-
--- Collections
-
---- Creates a table based on the keys and values in the iterator.
---- @remark When there are duplicate keys, the latest value will be used.
-function api:table()
-    local tbl = {}
-    for v1, v2 in self:iter() do
-        tbl[v1] = v2
-    end
-    return tbl
-end
---- Creates a list (sequential table) of the values in the iterator.
-function api:list()
-    local tbl = {}
-    for _, v in self:iter() do
-        tbl[#tbl + 1] = v
-    end
-    return tbl
-end
---- Creates a unique set of values. If multiple keys map to the same value, the first key is used.
---- @remark When there are duplicate keys, the latest key will be used.
-function api:set()
-    local unique, tbl = {}, {}
-    for v1, v2 in self:iter() do
-        if not unique[v2] then
-            unique[v2] = true
-            tbl[v1] = v2
-        end
-    end
-    return tbl
-end
---- Creates a unique list (sequential table) of values in the iterator.
-function api:distinct()
-    local unique, tbl = {}, {}
-    for _, v in self:iter() do
-        if not unique[v] then
-            unique[v] = true
-            tbl[#tbl + 1] = v
-        end
-    end
-    return tbl
-end
-
-local flua = {}
-
-function flua.index(table, skip)
-    if table == nil then return empty_iter end
-    local iterator, invariant, control = ipairs(table)
-    if skip ~= nil then
-        assert(type(skip) == 'number' and skip >= 0)
-        return flua(iterator, invariant, control + skip, #table - skip)
-    end
-    return flua(iterator, invariant, control, #table)
-end
-function flua.keys(table)
-    if table == nil then return empty_iter end
-    return flua(pairs(table))
-end
-
-local function range_next(invariant, control)
-    control = control + 1
-    if control <= invariant then
-        return control, control
-    end
-end
---- Generates a range between lower and upper
---- @param [lower] number  The optional lower bound of the range.
---- @param  upper  number  The upper bound of the range.
---- @remark Both lower and upper are inclusive. Lower is optional.
-function flua.range(lower, upper)
-    if not upper then
-        upper = lower
-        lower = 1
-    elseif lower > upper then
-        return empty_iter
-    end
-
-    return flua(range_next, upper, lower - 1, upper - lower + 1)
-end
-
-local function pattern_next(variant, control)
-    variant[1] = variant[1] + 1
-    control = control + 1
-    local s, e = string.find(variant[2], variant[3], variant[1])
-    if not s then return end
-    variant[1] = e
-    return control, string.sub(variant[2], s, e)
-end
---- Creates an iterator that matches a pattern in a string.
---- The returned iterator contains has index as key and the
---- match as value.
---- @param  string  string   The string to perform matching on.
---- @param  string  pattern  The pattern to match on the string.
---- @remark Does NOT support captures in the pattern.
---- Example:
---- print(table.concat(flua.pattern('hello world this is a string', '%a+ +%a+'):table(), ', '))
---- prints: 'hello world, this is, a string'
-function flua.pattern(string, pattern)
-    return flua(pattern_next, { 0, string, pattern }, 0, nil, true)
-end
-
-return setmetatable(flua, {
-    __call = function (self, iterator, invariant, control, initial_size, stateful)
-        return setmetatable({ iterator, invariant, control, not not stateful, initial_size }, metatable)
+        condition[#condition] = nil
+        condition = table.concat(condition)
+        local fn = load(([[return function (self, %s)
+            for %s in self:iter() do
+                if %s then
+                    return true
+                end
+            end
+            return false
+        end]]):format(vs, es, condition), 'contains_n', 't')()
+        rawset(self, index, fn)
+        return fn
     end
 })
+function api:contains(...)
+    local n = select('#', ...)
+    assert(self._width == n, 'wrong number of arguments to flua:contains')
+    return contains_n[n](self, ...)
+end
+
+return flua
