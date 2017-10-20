@@ -4,5 +4,5 @@ return {
     research_config = 'qol-%s-research-config',
     flat_bonus = 'qol-%s-flat-bonus',
     multiplier = 'qol-%s-multiplier',
-    field_toggle = 'qol-%s-field-%s'
+    field_toggle = 'qol-%s-field-%%s'
 }

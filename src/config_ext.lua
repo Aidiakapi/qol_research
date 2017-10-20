@@ -4,24 +4,40 @@ local config = require('config')
 local setting_name_formats = require('defines.setting_name_formats')
 local getters = {}
 
+local settings_global = setmetatable({}, {
+    __index = function (self, key)
+        -- Use global table to access values to prevent
+        -- issues when editing multiple settings...
+        if global and global.previous_settings then
+            return global.previous_settings[key]
+        else
+            return settings.global[key].value
+        end
+    end
+})
+
 function getters:is_enabled()
-    return true, settings.startup[setting_name_formats.enabled:format(self.name)].value
+    return true, settings.startup[self.setting_names.enabled].value
 end
 
 function getters:is_research_enabled()
-    return true, self:is_enabled() and settings.startup[setting_name_formats.research_enabled:format(self.name)].value
+    return true, self.is_enabled and settings.startup[self.setting_names.research_enabled].value
 end
 
 function getters:setting_flat_bonus()
-    return false, settings.global[setting_name_formats.flat_bonus:format(self.name)].value
+    return false, settings_global[self.setting_names.flat_bonus]
 end
 
 function getters:setting_multiplier()
-    return false, settings.global[setting_name_formats.multiplier:format(self.name)].value
+    return false, settings_global[self.setting_names.multiplier]
+end
+
+function getters:field_setting_names()
+    return true, flua.keys(self.field_setting_map)
 end
 
 function getters:config()
-    local config_str = settings.startup[setting_name_formats.research_config:format(self.name)].value
+    local config_str = settings.startup[self.setting_names.research_config].value
     if not config_str or #config_str == 0 then
         config_str = config[self.index].default_config
     end
@@ -33,26 +49,20 @@ function getters:config()
     end
 
     -- Parse the config
-    local config = flua.pattern(config_str, '[^:]+:?')
+    local config = flua.wrap(1, config_str:gmatch('([^:]+):?'))
         :map(function (tier_str, index)
-            local split = flua.pattern(tier_str, '[^:,]+,?')
-                :map(function (v) return v:match('([^:,]+),?') end)
-
-            local properties = split:list()
+            local properties = flua.wrap(1, tier_str:gmatch('([^:,]+),?')):list()
             parse_assert(#properties >= 7 and #properties % 2 == 1, index, 'incorrect number of properties')
 
             -- Generate ingredients table
             local ingredients = {}
-            flua.index(properties, 5):reduce(function (accumulator, value)
-                if #ingredients == accumulator then
-                    ingredients[accumulator + 1] = { value }
-                    return accumulator
+            for i, v in flua.ipairs(properties):skip(5):iter() do
+                if i % 2 == 0 then -- Ingredient name
+                    ingredients[(i - 4) / 2] = { v }
+                else -- Ingredient count
+                    ingredients[(i - 5) / 2][2] = v
                 end
-                local number = tonumber(value)
-                parse_assert(number ~= nil, index, 'ingredient count must be a number')
-                ingredients[accumulator + 1][2] = number
-                return accumulator + 1
-            end, 0)
+            end
             
             -- Parse all other properties
             local requirement = tonumber(properties[1])
@@ -74,7 +84,7 @@ function getters:config()
                 cycle_ingredients = ingredients
             }
         end)
-        :table()
+        :list()
 
     parse_assert(#config >= 1, 0, 'at least one tier must be configured')
     parse_assert(config[1].requirement == 0, 1, 'the first tier cannot have requirements')
@@ -86,15 +96,16 @@ function getters:config()
 end
 
 function getters:fields_filtered()
-    return false, flua.index(self.fields):filter(function (v)
-        local field_setting_name = self.field_toggles[v]
+    return false, flua.ivalues(self.fields):filter(function (field_name)
+        local field_setting_name = self.field_settings[field_name]
         if not field_setting_name then return true end
-        return settings.global[setting_name_formats.field_toggle:format(self.name, field_setting_name)].value
+        return settings_global[self.setting_names.field_toggle:format(field_setting_name)]
     end)
 end
 
 local metatable = {}
 function metatable.__index(self, key)
+    -- log(('indexing %s at %q'):format(self.name, key))
     local fn = getters[key]
     if fn then
         local cache, value = fn(self)
@@ -103,16 +114,22 @@ function metatable.__index(self, key)
     end
 end
 function metatable.__newindex(self, key, value)
-    error('cannot add extra properties to config_ext')
+    error('cannot add extra properties to config_ext', 2)
 end
 
-return flua.index(config):map(function (entry, index)
-    local field_toggles = {}
-    if entry.field_toggles then
-        for _, v in ipairs(entry.field_toggles) do
-            field_toggles[v[1]] = v[2]
-        end
-    end
+return flua.ipairs(config):map(function (index, entry)
+    local setting_names = flua.pairs(setting_name_formats)
+        :map(function (k, v)
+            return k, v:format(entry.name)
+        end)
+        :table()
+    
+    local field_setting_map = flua.pairs(entry.field_settings)
+        :map(function (field_name, setting_name)
+            return setting_names.field_toggle:format(setting_name), field_name
+        end)
+        :table()
+
     return setmetatable({
         index = index,
         name = entry.name,
@@ -120,6 +137,9 @@ return flua.index(config):map(function (entry, index)
         fields = entry.fields,
         description_factory = entry.description_factory,
         fields = entry.fields,
-        field_toggles = field_toggles
+        field_settings = entry.field_settings or {},
+        field_default_values = entry.field_default_values,
+        setting_names = setting_names,
+        field_setting_map = field_setting_map
     }, metatable)
-end):list()
+end, 1):list()

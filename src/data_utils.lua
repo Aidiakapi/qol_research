@@ -5,7 +5,7 @@ local data_utils = {}
 --- can be used to order prototypes relative to eachother.
 --- Example: create_ordering_table(5) => { 'a', 'b', 'c', 'd', 'e' }
 function data_utils.create_ordering_table(count)
-    print('creating ordering table for count', count)
+    -- print('creating ordering table for count', count)
     local digits = count <= 1 and 1 or math.ceil(math.log(count) / math.log(26))
     local current = flua.range(digits):list()
     return flua.range(0, count - 1):map(function (v)
