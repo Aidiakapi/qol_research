@@ -27,6 +27,12 @@
     to startup settings. I describe below how I deal with
     both of them.
 
+    TEMPORARILY DISABLED due to glitchiness, it will now
+    always do a full reset upon configuration changes. As
+    a result, this mod will fully override any other mods
+    that apply these changes through any means other than
+    technology effects.
+
     reset_technology_effects()
     Assuming this is solely called in migration scripts,
     which solely run when a change in mods is detected, it
@@ -386,6 +392,47 @@ local function unlock_depended_upon_researches(force)
     return unlocked_total
 end
 
+local function reset_force_fields(should_reset_all)
+    local relevant_config
+    if should_reset_all then
+        relevant_config = flua.ivalues(config_ext)
+            :list();
+    else
+        relevant_config = flua.ivalues(config_ext)
+            :filter(function (entry) return entry.is_enabled end)
+            :list();
+    end
+    
+    plog('resetting, all: %s', should_reset_all)
+
+    for _, force in pairs(game.forces) do
+        for _, entry in ipairs(relevant_config) do
+            local levels = get_tier_research_levels(force, entry)
+            local bonus = calculate_research_bonus_at(entry, levels)
+                        + entry.setting_flat_bonus
+            local fields
+            if should_reset_all then
+                fields = flua.ivalues(entry.fields)
+            else
+                fields = entry.fields_filtered
+            end
+            for field_name in fields:iter() do
+                local old_value = force[field_name]
+                local new_value = bonus + entry.field_default_values[field_name]
+                if old_value ~= new_value then
+                    local message = ([[%q from %s => %s]]):format(field_name, old_value, new_value)
+                    plog([[force: %q, %s]], force.name, message)
+                    message = '[qol] ' .. message
+                    for _, player in pairs(force.players) do
+                        player.print(message)
+                    end
+                    force[field_name] = new_value
+                end
+            end
+        end
+    end
+end
+
 script.on_configuration_changed(function (changes)
     plog('configuration change detected')
 
@@ -396,8 +443,12 @@ script.on_configuration_changed(function (changes)
         local old_version = qol_research.old_version
         if old_version ~= nil then
             local version_major, version_minor = old_version:match('^(%d+).(%d+).%d+$')
+            version_major, version_minor = tonumber(version_major), tonumber(version_minor)
             plog('%s == %s.%s', old_version, version_major, version_minor)
-            upgrade_from_v01 = tonumber(version_major) == 0 and tonumber(version_minor) == 1
+            upgrade_from_v01 = version_major == 0 and version_minor == 1
+            if version_major == 1 and version_minor == 1 then
+                pprint('resetting all research bonus previously misapplied')
+            end
         end
     end
     local startup_changed = changes.mod_startup_settings_changed
@@ -428,6 +479,10 @@ script.on_configuration_changed(function (changes)
         update_global_startup_settings()
     end
 
+    -- Temporarily disable the heuristic until a better approach is found
+    reset_force_fields(true)
+
+    --[==[
     -- When the startup configuration changes or it's an upgrade
     -- from version 0.1.x, it'll reset all values, triggering the
     -- reset below (provided that there are any bonuses).
@@ -441,10 +496,7 @@ script.on_configuration_changed(function (changes)
             :flatmap(function (entry)
                 return flua.ivalues(entry.fields)
                     :map(function (field)
-                        return field,
-                            entry.field_default_values
-                            and entry.field_default_values[field]
-                            or 0
+                        return field, entry.field_default_values[field]
                     end, 2)
             end, 2)
             :iter()
@@ -464,14 +516,11 @@ script.on_configuration_changed(function (changes)
         local bonus_values = flua.ivalues(enabled_config)
             :flatmap(function (entry)
                 local levels = get_tier_research_levels(force, entry)
-                local bonus = calculate_research_bonus_at(entry, levels) 
+                local bonus = calculate_research_bonus_at(entry, levels)
                             + entry.setting_flat_bonus
                 return entry.fields_filtered
                     :map(function (field_name)
-                        return field_name, bonus,
-                            entry.field_default_values
-                            and entry.field_default_values[field_name]
-                            or 0
+                        return field_name, bonus, entry.field_default_values[field_name]
                     end, 3)
             end, 3)
 
@@ -502,5 +551,27 @@ script.on_configuration_changed(function (changes)
                 end
             end
         end
+    end
+    ]==]
+end)
+
+
+
+commands.add_command('qol-reset', [[Sets all enabled Quality of Life based bonuses to the default values, and reapplying any bonuses from settings/research.
+Execute this command to fix interoperability issues with other mods.]], function (event)
+    if game.players[event.player_index].admin then
+        pprint('resetting')
+        reset_force_fields(false)
+    else
+        player.print('You must be an admin to run this command.')
+    end
+end)
+commands.add_command('qol-reset-all', [[Sets ALL Quality of Life based bonuses (including the ones disabled by settings) to the default values, and reapplying any bonuses from settings/research.
+Execute this command to fix interoperability issues with other mods.]], function (event)
+    if game.players[event.player_index].admin then
+        pprint('resetting all')
+        reset_force_fields(true)
+    else
+        player.print('You must be an admin to run this command.')
     end
 end)

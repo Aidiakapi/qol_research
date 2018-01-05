@@ -130,6 +130,13 @@ return flua.ipairs(config):map(function (index, entry)
         end)
         :table()
 
+    local field_default_values = entry.field_default_values or {}
+    for _, field_name in ipairs(entry.fields) do
+        if field_default_values[field_name] == nil then
+            field_default_values[field_name] = 0
+        end
+    end
+
     return setmetatable({
         index = index,
         name = entry.name,
@@ -138,7 +145,7 @@ return flua.ipairs(config):map(function (index, entry)
         description_factory = entry.description_factory,
         fields = entry.fields,
         field_settings = entry.field_settings or {},
-        field_default_values = entry.field_default_values,
+        field_default_values = field_default_values,
         setting_names = setting_names,
         field_setting_map = field_setting_map
     }, metatable)
