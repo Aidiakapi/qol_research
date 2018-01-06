@@ -4,18 +4,6 @@ local config = require('config')
 local setting_name_formats = require('defines.setting_name_formats')
 local getters = {}
 
-local settings_global = setmetatable({}, {
-    __index = function (self, key)
-        -- Use global table to access values to prevent
-        -- issues when editing multiple settings...
-        if global and global.previous_settings then
-            return global.previous_settings[key]
-        else
-            return settings.global[key].value
-        end
-    end
-})
-
 function getters:is_enabled()
     return true, settings.startup[self.setting_names.enabled].value
 end
@@ -25,11 +13,11 @@ function getters:is_research_enabled()
 end
 
 function getters:setting_flat_bonus()
-    return false, settings_global[self.setting_names.flat_bonus]
+    return false, settings.global[self.setting_names.flat_bonus].value
 end
 
 function getters:setting_multiplier()
-    return false, settings_global[self.setting_names.multiplier]
+    return false, settings.global[self.setting_names.multiplier].value
 end
 
 function getters:field_setting_names()
@@ -96,10 +84,10 @@ function getters:config()
 end
 
 function getters:fields_filtered()
-    return false, flua.ivalues(self.fields):filter(function (field_name)
+    return false, self.fields:filter(function (field_name)
         local field_setting_name = self.field_settings[field_name]
         if not field_setting_name then return true end
-        return settings_global[self.setting_names.field_toggle:format(field_setting_name)]
+        return settings.global[self.setting_names.field_toggle:format(field_setting_name)].value
     end)
 end
 
@@ -130,22 +118,14 @@ return flua.ipairs(config):map(function (index, entry)
         end)
         :table()
 
-    local field_default_values = entry.field_default_values or {}
-    for _, field_name in ipairs(entry.fields) do
-        if field_default_values[field_name] == nil then
-            field_default_values[field_name] = 0
-        end
-    end
-
     return setmetatable({
         index = index,
         name = entry.name,
         type = entry.type,
-        fields = entry.fields,
         description_factory = entry.description_factory,
-        fields = entry.fields,
+        fields = flua.ivalues(entry.fields),
+        field_defaults = entry.field_defaults or {},
         field_settings = entry.field_settings or {},
-        field_default_values = field_default_values,
         setting_names = setting_names,
         field_setting_map = field_setting_map
     }, metatable)

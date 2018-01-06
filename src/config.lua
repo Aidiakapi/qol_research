@@ -57,6 +57,8 @@
     Tech 2-4, 15% bonus, 20 seconds/cycle, 50 * 2^3 = 400 cycles of 1 x science-pack-1 and 1 x science-pack-2
 ]]
 
+local load_technology_quickbar_bonus
+
 local percentage_description = function (value) return ('%g%%'):format(value * 100) end
 local pluralize_description = function (unit) return function (value) return ('%d %s%s'):format(value, unit, value == 1 and '' or 's') end end
 local config = {
@@ -146,8 +148,16 @@ local config = {
         fields = {
             'quickbar_count'
         },
-        field_default_values = {
-            ['quickbar_count'] = 1
+        field_defaults = {
+            ['quickbar_count'] = function (force)
+                local base = 1
+                for tech_name, modifier in pairs(load_technology_quickbar_bonus()) do
+                    if force.technologies[tech_name].researched then
+                        base = base + modifier
+                    end
+                end
+                return base
+            end
         },
         description_factory = pluralize_description('belt')
     }
@@ -157,4 +167,24 @@ for _, entry in pairs(config) do
         entry.default_config = table.concat(entry.default_config, ':')
     end
 end
+
+do
+    local technology_quickbar_bonus
+    load_technology_quickbar_bonus = function ()
+        if technology_quickbar_bonus ~= nil then
+            return technology_quickbar_bonus
+        end
+
+        technology_quickbar_bonus = {}
+        for _, prototype in pairs(game.technology_prototypes) do
+            for _, effect in pairs(prototype.effects) do
+                if effect.type == 'quick-bar-count' then
+                    technology_quickbar_bonus[prototype.name] = effect.modifier
+                end
+            end
+        end
+        return technology_quickbar_bonus
+    end
+end
+
 return config

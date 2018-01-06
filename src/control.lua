@@ -2,59 +2,9 @@
     
     File containing the primary logic for the mod.
 
-    Description of the global table:
-    global:
-        previous_settings:
-            $-flat-bonus: number
-            $-multiplier: number
-            $-flag-$: boolean
-        startup_settings:
-            $: any
-
-    The $ sign is a placeholder for dynamic values
-    startup_settings will hold all known startup settings
-    this is used to detect whether any of this mod's values
-    have changed in on_configuration_changed.
-
-    Because the mod does not store per-force or per-player
-    information, and because when merging forces, all the
-    technologies of the source force are just destroyed,
-    there is no need to handle those events.
-
-    There are a few edge cases that are particularly hard
-    to deal with. Notably, any mod calling the LuaForce
-    reset_technology_effects function, and modifications
-    to startup settings. I describe below how I deal with
-    both of them.
-
-    TEMPORARILY DISABLED due to glitchiness, it will now
-    always do a full reset upon configuration changes. As
-    a result, this mod will fully override any other mods
-    that apply these changes through any means other than
-    technology effects.
-
-    reset_technology_effects()
-    Assuming this is solely called in migration scripts,
-    which solely run when a change in mods is detected, it
-    uses a heuristic to determine if it were called. This
-    heuristic will compute the mimimum possible value that
-    each field should have (based on the flat_bonus setting
-    and technology levels). If it finds any field that has
-    a current value lower than what would be permissable by
-    the settings, it will add all bonuses. Since any mod
-    could add larger bonuses that push it over this minimum,
-    qol_research may be broken by other mods.
-
-    Modification of startup settings
-    Because the mod allows for any arbitrary tech tree to be
-    created through startup settings, it'd require parsing
-    and storing the previous tech tree, and then calculating
-    bonus field diffs based on that. This is not impossible,
-    and requires only minor refactoring. It is however such
-    a niche scenario, that I do not consider it worth the time
-    right now, and instead it's a feature I consider I may
-    consider in the future. For now it performs a reset, which
-    then triggers the same code as reset_technology_effects().
+    Since v2.0.0 no more state is stored in the
+    global table, and instead all information can
+    be derived from the on_configuration_changed.
 
 ]=]
 
@@ -86,15 +36,6 @@ local function pprint(...)
     log(message)
     for _, player in pairs(game and game.players or {}) do
         player.print(message)
-    end
-end
-
-local function add_relative_bonus(force, entry, value)
-    assert(entry.is_enabled, '[qol] add_relative_bonus called whilst entry is disabled');
-    if value == 0 then return end
-    for field in entry.fields_filtered:iter() do
-        plog('%s.%s: %s => %s', force.name, field, force[field], force[field] + value)
-        force[field] = force[field] + value
     end
 end
 
@@ -155,14 +96,96 @@ end
 
 --[=[
     Gets the level of each research tier.
+    @param  force          LuaForce
+    @param  entry          ConfigExt
     @return number[]  All research tier levels.
 ]=]
 local function get_tier_research_levels(force, entry)
     return flua.range(#entry.config)
         :map(function (tier_index)
-            return get_tier_research_level(force, entry, tier_index)
-        end)
-        :list()
+            return tier_index, get_tier_research_level(force, entry, tier_index)
+        end, 2)
+        :table()
+end
+
+--[=[
+    Updates the field values for a specific force and entry.
+    @param  force          LuaForce
+    @param  entry          ConfigExt
+    @param  all_fields     any bool
+]=]
+local function update_for_force_and_entry(force, entry, all_fields)
+    local bonus = 0
+    if entry.is_enabled then
+        bonus = entry.setting_flat_bonus
+        if entry.is_research_enabled then
+            local levels = get_tier_research_levels(force, entry)
+            bonus = bonus + calculate_research_bonus_at(entry, levels)
+        end
+    end
+    
+    if bonus < 0 then
+        plog('detected negative bonus for %q of value %s, clamping', entry.name, bonus)
+        bonus = 0
+    end
+
+    local fields = all_fields and entry.fields or entry.fields_filtered
+
+    local enabled_fields = entry.fields_filtered
+        :map(function (field) return field, true end, 2)
+        :table()
+
+    for field in fields:iter() do
+        local old_value = force[field]
+        local new_value
+        if enabled_fields[field] then
+            new_value = bonus
+        else
+            new_value = 0
+        end
+        if entry.field_defaults[field] ~= nil then
+            new_value = new_value + entry.field_defaults[field](force)
+        end
+
+        if old_value ~= new_value then
+            plog('force %q modifying %q: %s => %s', force.name, field, old_value, new_value)
+            force[field] = new_value
+        end
+    end
+end
+
+--[=[
+    Updates the field values for a specific force.
+    @param  force          LuaForce
+    @param  all_fields     any bool
+]=]
+local function update_for_force(force, all_fields)
+    for _, entry in ipairs(config_ext) do
+        if entry.is_enabled then
+            update_for_force_and_entry(force, entry, all_fields)
+        end
+    end
+end
+
+--[=[
+    Updates the field values for a all forces.
+    @param  all_fields     any bool
+]=]
+local function update_for_all_forces(all_fields)
+    for _, force in pairs(game.forces) do
+        update_for_force(force, all_fields)
+    end
+end
+
+--[=[
+    Updates every possible field on every force.
+]=]
+local function update_all_including_disabled()
+    for _, force in pairs(game.forces) do
+        for _, entry in ipairs(config_ext) do
+            update_for_force_and_entry(force, entry, true)
+        end
+    end
 end
 
 --[=[
@@ -194,57 +217,6 @@ local function parse_research_name(research_name)
     return entry, research_tier, research_level
 end
 
-local function update_global_startup_settings()
-    global.startup_settings = flua.ivalues(config_ext)
-        :flatmap(function (entry)
-            return flua.ivalues({
-                setting_name_formats.enabled:format(entry.name),
-                setting_name_formats.research_enabled:format(entry.name),
-                setting_name_formats.research_config:format(entry.name)
-            })
-        end)
-        :map(function (setting_name)
-            return setting_name, settings.startup[setting_name].value
-        end, 2)
-        :table()
-end
-
-local function init_global_table()
-    for k, _ in pairs(global) do
-        global[k] = nil
-    end
-
-    global.previous_settings =
-        flua.ivalues(config_ext)
-        :flatmap(function (entry)
-            return flua.ivalues({
-                entry.setting_names.flat_bonus,
-                entry.setting_names.multiplier
-            }):concat(entry.field_setting_names)
-        end)
-        :map(function (setting)
-            return setting, settings.global[setting].value
-        end, 2)
-        :table()
-    
-    update_global_startup_settings()
-end
-
-script.on_init(function ()
-    init_global_table()
-
-    -- Add all flat bonuses for all enabled tiers
-    for entry in flua.ivalues(config_ext)
-        :filter(function (entry) return entry.is_enabled end)
-        :iter()
-        do
-        local flat_bonus = entry.setting_flat_bonus
-        for _, force in pairs(game.forces) do
-            add_relative_bonus(force, entry, flat_bonus)
-        end
-    end
-end)
-
 -- Handles adding bonuses for research 
 script.on_event(defines.events.on_research_finished, function (event)
     if suppress_research_unlocks then return end
@@ -254,86 +226,14 @@ script.on_event(defines.events.on_research_finished, function (event)
     local entry, research_tier, research_level = parse_research_name(research.name)
     if not entry then return end
 
-    plog('research completed \'%s\'', research.name)
-
-    local levels = get_tier_research_levels(force, entry)
-    
-    local new_bonus = calculate_research_bonus_at(entry, levels)
-    levels[research_tier] = levels[research_tier] - 1
-    local old_bonus = calculate_research_bonus_at(entry, levels)
-
-    local extra = new_bonus - old_bonus
-    add_relative_bonus(force, entry, extra)
+    plog('research completed %q', research.name)
+    update_for_force_and_entry(force, entry)
 end)
 
 -- Handles the modifications of the character bonus factors based on settings.
 script.on_event(defines.events.on_runtime_mod_setting_changed, function (event)
-    local setting = event.setting
-    local old_value = global.previous_settings[setting]
-    if old_value == nil then return end
-    
-    local new_value = settings.global[setting].value
-    global.previous_settings[setting] = new_value
-
-    plog('setting changed \'%s\': %s => %s', setting, old_value, new_value)
-
-    -- Flat bonus settings
-    local entry = flua.ivalues(config_ext):first(function (v)
-        return setting == v.setting_names.flat_bonus
-    end)
-    if entry then
-        if not entry.is_enabled then
-            pprint('warning: ', entry.name, ' upgrades are not enabled')
-            return
-        end
-        local delta_value = new_value - old_value
-        for _, force in pairs(game.forces) do
-            add_relative_bonus(force, entry, delta_value)
-        end
-        return
-    end
-
-    -- Modifier bonus settings
-    entry = flua.ivalues(config_ext):first(function (v)
-        return setting == v.setting_names.multiplier
-    end)
-    if entry then
-        if not entry.is_enabled then
-            pprint('warning: ', entry.name, ' upgrades are not enabled')
-            return
-        end
-        for _, force in pairs(game.forces) do
-            local levels = get_tier_research_levels(force, entry)
-            local old_bonus = calculate_research_bonus_at(entry, levels, old_value)
-            local new_bonus = calculate_research_bonus_at(entry, levels, new_value)
-            local delta_bonus = new_bonus - old_bonus
-            add_relative_bonus(force, entry, delta_bonus)
-        end
-        return
-    end
-
-    -- Field flag settings
-    entry = flua.ivalues(config_ext):first(function (v)
-        return v.field_setting_map[setting] ~= nil
-    end)
-    if not entry then
-        return
-    end
-    if not entry.is_enabled then
-        pprint('warning: ', entry.name, ' upgrades are not enabled')
-        return
-    end
-
-    local field = entry.field_setting_map[setting]
-    for _, force in pairs(game.forces) do
-        local bonus = calculate_research_bonus_at(entry, get_tier_research_levels(force, entry))
-                    + entry.setting_flat_bonus
-        if old_value then
-            bonus = bonus * -1
-        end
-        plog('%s.%s: %s => %s', force.name, field, force[field], force[field] + bonus)
-        force[field] = force[field] + bonus
-    end
+    plog('runtime settings changed, performing a reset for enabled entries and all fields')
+    update_for_all_forces(true)
 end)
 
 local function unlock_depended_upon_researches(force)
@@ -392,49 +292,13 @@ local function unlock_depended_upon_researches(force)
     return unlocked_total
 end
 
-local function reset_force_fields(should_reset_all)
-    local relevant_config
-    if should_reset_all then
-        relevant_config = flua.ivalues(config_ext)
-            :list();
-    else
-        relevant_config = flua.ivalues(config_ext)
-            :filter(function (entry) return entry.is_enabled end)
-            :list();
-    end
-    
-    plog('resetting, all: %s', should_reset_all)
-
-    for _, force in pairs(game.forces) do
-        for _, entry in ipairs(relevant_config) do
-            local levels = get_tier_research_levels(force, entry)
-            local bonus = calculate_research_bonus_at(entry, levels)
-                        + entry.setting_flat_bonus
-            local fields
-            if should_reset_all then
-                fields = flua.ivalues(entry.fields)
-            else
-                fields = entry.fields_filtered
-            end
-            for field_name in fields:iter() do
-                local old_value = force[field_name]
-                local new_value = bonus + entry.field_default_values[field_name]
-                if old_value ~= new_value then
-                    local message = ([[%q from %s => %s]]):format(field_name, old_value, new_value)
-                    plog([[force: %q, %s]], force.name, message)
-                    message = '[qol] ' .. message
-                    for _, player in pairs(force.players) do
-                        player.print(message)
-                    end
-                    force[field_name] = new_value
-                end
-            end
-        end
-    end
-end
-
 script.on_configuration_changed(function (changes)
     plog('configuration change detected')
+
+    -- Clear out the global table, it is no longer necessary
+    for k, _ in pairs(global) do
+        global[k] = nil
+    end
 
     -- Transforming the old global table to the new global table
     local qol_research = changes.mod_changes.qol_research
@@ -451,13 +315,6 @@ script.on_configuration_changed(function (changes)
             end
         end
     end
-    local startup_changed = changes.mod_startup_settings_changed
-        and (global.startup_settings
-            and flua.pairs(global.startup_settings)
-            :any(function (setting_name, old_value)
-                local new_value = settings.startup[setting_name].value
-                return new_value ~= old_value
-            end))
 
     if upgrade_from_v01 then
         local restore_count = flua.wrap(2, pairs(game.forces))
@@ -466,93 +323,19 @@ script.on_configuration_changed(function (changes)
             end, 1)
             :sum()
         if restore_count == 0 then
-            pprint('Upgraded from v0.1 to v1.0, you may have lost some researches.')
+            pprint('Upgraded from v0.1 to v2.0, you may have lost some researches.')
         elseif restore_count == 1 then
-            pprint('Upgraded from v0.1 to v1.0, 1 research was restored, but some may be lost.')
+            pprint('Upgraded from v0.1 to v2.0, 1 research was restored, but some may be lost.')
         else
-            pprint(('Upgraded from v0.1 to v1.0. %s researches were restored, but some may be lost.'):format(restore_count))
+            pprint(('Upgraded from v0.1 to v2.0. %s researches were restored, but some may be lost.'):format(restore_count))
         end
         init_global_table()
-    elseif startup_changed then
-        pprint('warning: changing mod startup settings overwrites bonus values on force')
-        pprint('warning: this may conflict with other mods that provide bonuses through script')
-        update_global_startup_settings()
     end
 
-    -- Temporarily disable the heuristic until a better approach is found
-    reset_force_fields(true)
-
-    --[==[
-    -- When the startup configuration changes or it's an upgrade
-    -- from version 0.1.x, it'll reset all values, triggering the
-    -- reset below (provided that there are any bonuses).
-    local pending_reset_actions
-    if upgrade_from_v01 or startup_changed then
-        pending_reset_actions = {}
-        for force_name in pairs(game.forces) do
-            pending_reset_actions[force_name] = {}
-        end
-        for field, default_value in flua.ivalues(config_ext)
-            :flatmap(function (entry)
-                return flua.ivalues(entry.fields)
-                    :map(function (field)
-                        return field, entry.field_default_values[field]
-                    end, 2)
-            end, 2)
-            :iter()
-            do
-            for _, force in pairs(game.forces) do
-                pending_reset_actions[force.name][field] = default_value - force[field]
-            end
-        end
+    -- If startup settings were changed, reset all entries' bonuses
+    if changes.mod_startup_settings_changed then
+        update_all_including_disabled()
     end
-
-    -- Use a heuristic to determine if the technology effects
-    -- were actually reset. If so, restore those effects.
-    local enabled_config = flua.ivalues(config_ext)
-        :filter(function (entry) return entry.is_enabled end)
-        :list();
-    for _, force in pairs(game.forces) do
-        local bonus_values = flua.ivalues(enabled_config)
-            :flatmap(function (entry)
-                local levels = get_tier_research_levels(force, entry)
-                local bonus = calculate_research_bonus_at(entry, levels)
-                            + entry.setting_flat_bonus
-                return entry.fields_filtered
-                    :map(function (field_name)
-                        return field_name, bonus, entry.field_default_values[field_name]
-                    end, 3)
-            end, 3)
-
-        local is_reset = pending_reset_actions
-            or bonus_values
-            :any(function (field_name, bonus, default)
-                return force[field_name] < bonus + default
-            end)
-        
-        if is_reset then
-            plog('\'%s\' effect reset detected, attempting to restore', force.name)
-            for field, value in bonus_values:iter() do
-                if value ~= 0 then
-                    plog('restore %s.%s: %s => %s', force.name, field, force[field], force[field] + value)
-                    force[field] = force[field] + value
-                end
-            end
-        end
-    end
-
-    if pending_reset_actions then
-        for force_name, fields in pairs(pending_reset_actions) do
-            local force = game.forces[force_name]
-            for field, value in pairs(fields) do
-                if value ~= 0 then
-                    plog('reset %s.%s: %s => %s', force.name, field, force[field], force[field] + value)
-                    force[field] = force[field] + value
-                end
-            end
-        end
-    end
-    ]==]
 end)
 
 
@@ -560,18 +343,18 @@ end)
 commands.add_command('qol-reset', [[Sets all enabled Quality of Life based bonuses to the default values, and reapplying any bonuses from settings/research.
 Execute this command to fix interoperability issues with other mods.]], function (event)
     if game.players[event.player_index].admin then
-        pprint('resetting')
-        reset_force_fields(false)
+        pprint('resetting, check factorio-current.log if you want details')
+        update_for_all_forces(true)
     else
-        player.print('You must be an admin to run this command.')
+        player.print('[qol] you must be an admin to run this command')
     end
 end)
 commands.add_command('qol-reset-all', [[Sets ALL Quality of Life based bonuses (including the ones disabled by settings) to the default values, and reapplying any bonuses from settings/research.
 Execute this command to fix interoperability issues with other mods.]], function (event)
     if game.players[event.player_index].admin then
-        pprint('resetting all')
-        reset_force_fields(true)
+        pprint('resetting all, check factorio-current.log if you want details')
+        update_all_including_disabled()
     else
-        player.print('You must be an admin to run this command.')
+        player.print('[qol] you must be an admin to run this command')
     end
 end)
