@@ -141,16 +141,16 @@ local function update_for_force_and_entry(force, entry)
             if remainder >= value then
                 remainder = remainder - value
                 if not tech.researched then
-                    plog('enabled internal tech:  %q', tech.name)
+                    plog('enabled internal tech:  %q (%d * %f)', tech.name, value, value_scale)
                     tech.researched = true
                 end
             elseif tech.researched then
+                plog('disabled internal tech:  %q (%d * %f)', tech.name, value, value_scale)
                 pending_toggles[#pending_toggles + 1] = tech
             end
         end
 
         for _, tech in ipairs(pending_toggles) do
-            plog('disabled internal tech: %q', tech.name)
             tech.researched = false
             tech.enabled = false
         end
@@ -292,13 +292,18 @@ script.on_configuration_changed(function (changes)
 
     local qol_research = changes.mod_changes.qol_research
     local upgrade_from_v01 = false
+    local reset_tech_effects = false
     if qol_research ~= nil then
         local old_version = qol_research.old_version
         if old_version ~= nil then
             local version_major, version_minor = old_version:match('^(%d+).(%d+).%d+$')
             version_major, version_minor = tonumber(version_major), tonumber(version_minor)
-            plog('%s == %s.%s', old_version, version_major, version_minor)
+
             upgrade_from_v01 = version_major == 0 and version_minor == 1
+
+            if version_major < 2 or (version_major == 2 and version_minor < 2) then
+                reset_tech_effects = true
+            end
         end
     end
 
@@ -309,17 +314,24 @@ script.on_configuration_changed(function (changes)
         :sum()
     if upgrade_from_v01 then
         if restore_count == 0 then
-            pprint('Upgraded from v0.1 to v2.0, you may have lost some researches.')
+            pprint('Upgraded from beta version, you may have lost some researches.')
         elseif restore_count == 1 then
-            pprint('Upgraded from v0.1 to v2.0, 1 research was restored, but some may be lost.')
+            pprint('Upgraded from beta version, 1 research was restored, but some may be lost.')
         else
-            pprint(('Upgraded from v0.1 to v2.0. %s researches were restored, but some may be lost.'):format(restore_count))
+            pprint(('Upgraded from beta version. %s researches were restored, but some may be lost.'):format(restore_count))
         end
     elseif restore_count > 0 then
         pprint(('Technology tree changed, %s depended upon researches were automatically unlocked.'):format(restore_count))
     end
 
     update_for_all_forces()
+
+    if changes.mod_startup_settings_changed or reset_tech_effects then
+        plog('resetting technology effects (startup settings changed: %s, mod structure change: %s)', changes.mod_startup_settings_changed, reset_tech_effects)
+        for _, force in pairs(game.forces) do
+            force.reset_technology_effects()
+        end
+    end
 end)
 
 commands.add_command('qol-reset', [[Syncs all technology effects, run this after using commands to undo research.]], function (event)
