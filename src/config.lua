@@ -67,10 +67,10 @@ local config = {
         type = 'double',
         default_config = {
             '0,5,0.20,10,150*L,science-pack-1,1',
-            '3,5,0.15,15,175*L,science-pack-1,1,science-pack-2,1',
-            '3,5,0.10,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
+            '3,5,0.10,15,175*L,science-pack-1,1,science-pack-2,1',
+            '3,5,0.05,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '3,5,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
-            '3,0,0.05,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+            '5,0,0.05,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
         fields = { 'character-crafting-speed' },
         field_technology = {
@@ -83,10 +83,11 @@ local config = {
         name = 'inventory-size',
         type = 'int',
         default_config = {
-            '0,2,5,15,150*L,science-pack-1,1',
-            '1,2,5,20,175*L,science-pack-1,1,science-pack-2,1',
-            '1,2,5,25,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
-            '1,2,5,30,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1'
+            '0,2,5,10,150*L,science-pack-1,1',
+            '1,2,5,15,175*L,science-pack-1,1,science-pack-2,1',
+            '1,2,5,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
+            '1,2,5,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
+            '2,0,5,30,5000*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
         fields = { 'character-inventory-slots-bonus' },
         field_technology = {
@@ -100,10 +101,10 @@ local config = {
         type = 'double',
         default_config = {
             '0,5,0.20,10,150*L,science-pack-1,1',
-            '3,5,0.15,15,175*L,science-pack-1,1,science-pack-2,1',
-            '3,5,0.10,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
+            '3,5,0.10,15,175*L,science-pack-1,1,science-pack-2,1',
+            '3,5,0.05,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '3,5,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
-            '3,0,0.05,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+            '5,0,0.05,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
         fields = { 'character-mining-speed' },
         field_technology = {
@@ -120,7 +121,7 @@ local config = {
             '2,4,0.05,15,175*L,science-pack-1,1,science-pack-2,1',
             '2,4,0.05,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '2,4,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
-            '2,0,0.05,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+            '4,0,0.05,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
         fields = { 'character-running-speed' },
         field_technology = {
@@ -137,7 +138,7 @@ local config = {
             '2,4,1,15,175*L,science-pack-1,1,science-pack-2,1',
             '2,4,1,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '2,4,1,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
-            '2,0,1,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+            '4,0,1,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
         fields =
         {
