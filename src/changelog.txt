@@ -1,0 +1,64 @@
+---------------------------------------------------------------------------------------------------
+Version: 2.2.0
+Date: 25. 01. 2018
+  Features:
+    - Added flag to disable infinite research.
+  Balancing:
+    - Reduced the bonuses in the default configuration from green and blue science tiers by 5% for player crafting and mining speed.
+    - Increased the cost of infinite research tiers.
+    - Added infinite research tiers to inventory size.
+  Compatibility:
+    - Bonuses are now applied as technology effects, resolves compatibility issues with mods that invoke reset_technology_effects.
+    - Compatibility with other mods should now work across the board, however, if startup settings are changed, the mod will invoke reset_technology_effects during on_configuration_changed.
+---------------------------------------------------------------------------------------------------
+Version: 2.1.0
+Date: 07. 01. 2018
+  Features:
+    - Created new higher resolution icons for half of the technologies.
+---------------------------------------------------------------------------------------------------
+Version: 2.0.0
+Date: 07. 01. 2018
+  Bugfixes:
+    - Fixed crash when if a negative value were to be applied.
+    - Fixed issues with values not being applied properly upon configuration changes.
+  Compatibility:
+    - Changed to overwrite force modifier values, therefore becoming incompatible with mods that also do that.
+---------------------------------------------------------------------------------------------------
+Version: 1.2.0
+Date: 06. 01. 2018
+  Features:
+    - Added command to reset bonuses. Use /qol-reset.
+  Bugfixes:
+    - Fixed incorrect bonus value (bonuses applied multiple times) by invoking reset upon configuration changes.
+---------------------------------------------------------------------------------------------------
+Version: 1.1.0
+Date: 15. 12. 2017
+  Features:
+    - Updated for 0.16.
+---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+Date: 20. 10. 2017
+  Features:
+    - Added ability to have fractional multipliers as runtime setting for integer bonuses (quickbars, player reach, inventory size).
+  Changes:
+    - Restructured the tech tree to have better support for custom configuration trees.
+    - Removed requirement for on_tick handler, the mod should now have no impact on UPS whatsoever.
+    - Renamed Mining Speed to Player Mining Speed.
+  Bugfixes:
+    - Fixed inventory explosion in even more situations.
+  Compatibility:
+    - Added heuristic to determine if another mod invoked reset_technology_effects, and if so, reset the bonuses.
+  Balancing:
+    - Stronger early-game upgrades, and lesser late-game upgrades.
+    - Infinite science requires exponential amounts of science packs, preventing it from becoming extremely OP in megabases.
+    - Slightly increase overall costs.
+---------------------------------------------------------------------------------------------------
+Version: 0.1.4
+Date: 08. 08. 2017
+  Bugfixes:
+    - Fixed inventory explosion by deferring changes to the properties.
+---------------------------------------------------------------------------------------------------
+Version: 0.1.3
+Date: 20. 07. 2017
+  Features:
+    - Added detailed descriptions to all technologies.
