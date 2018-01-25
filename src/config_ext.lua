@@ -40,7 +40,7 @@ function getters:config()
 
     -- Parse the config
     local config = config_entries
-        :map(function (tier_str, index)
+        :flatmap(function (tier_str, index)
             local properties = flua.wrap(1, tier_str:gmatch('([^:,]+),?')):list()
             parse_assert(#properties >= 7 and #properties % 2 == 1, index, 'incorrect number of properties')
 
@@ -65,14 +65,17 @@ function getters:config()
             parse_assert(type(cycle_duration) == 'number' and cycle_duration >= 0, index, 'cycle duration must be a non-negative number')
             local cost_formula = properties[5]
 
-            return {
+            if tier_depth == 0 and not settings.startup[setting_name_formats.infinite_research_enabled].value then
+                return flua.duplicate(0, true)
+            end
+            return flua.duplicate(1, {
                 requirement = requirement,
                 tier_depth = tier_depth,
                 effect_value = effect_value,
                 cycle_duration = cycle_duration,
                 cost_formula = cost_formula,
                 cycle_ingredients = ingredients
-            }
+            })
         end)
         :list()
 
