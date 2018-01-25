@@ -2,7 +2,7 @@ local flua = require('flua')
 local config_ext = flua.ivalues(require('config_ext'))
 local data_utils = require('data_utils')
 local player_technology_format = 'qol-%s-%d-%d'
-local internal_technology_format = 'qolinternal-%d-%s-%d'
+local internal_technology_format = 'qolinternal-%s-%d'
 
 local ordering_table = data_utils.create_ordering_table(math.max(
     config_ext:map(function (entry) return #entry.config end):max(),
@@ -88,10 +88,11 @@ local internal_technologies = config_ext
     :filter(function (entry) return entry.is_enabled end)
     :flatmap(function (entry)
         return entry.fields:flatmap(function (field)
-            return flua.range(0, entry.field_technology.count - 1):flatmap(function (index)
-                return flua.values({ {
+            return flua.range(0, entry.field_technology.count - 1)
+                :map(function (index)
+                return {
                     type = 'technology',
-                    name = internal_technology_format:format(index, field, 1),
+                    name = internal_technology_format:format(field, index + 1),
                     icon = '__qol_research__/graphics/blank.png',
                     icon_size = 1,
                     enabled = false,
@@ -106,24 +107,27 @@ local internal_technologies = config_ext
                         type = field,
                         modifier = entry.field_technology.value_scale * math.pow(2, index),
                     } },
+                    prerequisites = index ~= 0 and { internal_technology_format:format(field, index) } or nil,
                     order = '~~~~~~~~~~~~~~',
                     upgrade = true,
-                }, {
-                    type = 'technology',
-                    name = internal_technology_format:format(index, field, 2),
-                    icon = '__qol_research__/graphics/blank.png',
-                    icon_size = 1,
-                    enabled = false,
-                    unit =
-                    {
-                        count = 1,
-                        time = 1,
-                        ingredients = { }
-                    },
-                    order = '~~~~~~~~~~~~~~',
-                    upgrade = true,
-                } })
+                }
             end)
+            :concat(flua.duplicate(1, {
+                type = 'technology',
+                name = internal_technology_format:format(field, entry.field_technology.count + 1),
+                icon = '__qol_research__/graphics/blank.png',
+                icon_size = 1,
+                enabled = false,
+                unit =
+                {
+                    count = 1,
+                    time = 1,
+                    ingredients = { }
+                },
+                prerequisites = { internal_technology_format:format(field, entry.field_technology.count) },
+                order = '~~~~~~~~~~~~~~',
+                upgrade = true,
+            }))
         end)
     end)
     :list()

@@ -12,7 +12,7 @@ local flua = require('flua')
 local config_ext = require('config_ext')
 local setting_name_formats = require('defines.setting_name_formats')
 local player_technology_format = 'qol-%s-%d-%d'
-local internal_technology_format = 'qolinternal-%d-%s-1'
+local internal_technology_format = 'qolinternal-%s-%d'
 
 local suppress_research_unlocks = false
 
@@ -137,14 +137,12 @@ local function update_for_force_and_entry(force, entry)
         local pending_toggles = {}
         for n = entry.field_technology.count - 1, 0, -1 do
             local value = math.pow(2, n)
-            print(internal_technology_format:format(n, field))
-            local tech = force.technologies[internal_technology_format:format(n, field)]
+            local tech = force.technologies[internal_technology_format:format(field, n + 1)]
             if remainder >= value then
                 remainder = remainder - value
                 if not tech.researched then
                     plog('enabled internal tech:  %q', tech.name)
                     tech.researched = true
-                    tech.enabled = false
                 end
             elseif tech.researched then
                 pending_toggles[#pending_toggles + 1] = tech
@@ -152,7 +150,7 @@ local function update_for_force_and_entry(force, entry)
         end
 
         for _, tech in ipairs(pending_toggles) do
-            plog('disabling internal tech: %q', tech.name)
+            plog('disabled internal tech: %q', tech.name)
             tech.researched = false
             tech.enabled = false
         end
