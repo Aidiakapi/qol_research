@@ -11,7 +11,8 @@
 local flua = require('flua')
 local config_ext = require('config_ext')
 local setting_name_formats = require('defines.setting_name_formats')
-local tech_format = 'qol-%s-%d-%d'
+local player_technology_format = 'qol-%s-%d-%d'
+local internal_technology_format = 'qolinternal-%d-%s-1'
 
 local suppress_research_unlocks = false
 
@@ -112,16 +113,13 @@ end
     Updates the field values for a specific force and entry.
     @param  force          LuaForce
     @param  entry          ConfigExt
-    @param  all_fields     any bool
 ]=]
-local function update_for_force_and_entry(force, entry, all_fields)
-    local bonus = 0
-    if entry.is_enabled then
-        bonus = entry.setting_flat_bonus
-        if entry.is_research_enabled then
-            local levels = get_tier_research_levels(force, entry)
-            bonus = bonus + calculate_research_bonus_at(entry, levels)
-        end
+local function update_for_force_and_entry(force, entry)
+    if not entry.is_enabled then return end
+    local bonus = entry.setting_flat_bonus
+    if entry.is_research_enabled then
+        local levels = get_tier_research_levels(force, entry)
+        bonus = bonus + calculate_research_bonus_at(entry, levels)
     end
     
     if bonus < 0 then
@@ -129,27 +127,34 @@ local function update_for_force_and_entry(force, entry, all_fields)
         bonus = 0
     end
 
-    local fields = all_fields and entry.fields or entry.fields_filtered
-
-    local enabled_fields = entry.fields_filtered
-        :map(function (field) return field, true end, 2)
-        :table()
-
-    for field in fields:iter() do
-        local old_value = force[field]
-        local new_value
-        if enabled_fields[field] then
-            new_value = bonus
-        else
-            new_value = 0
+    local technology_count = entry.field_technology.count
+    local value_scale = entry.field_technology.value_scale
+    for field in entry.fields:iter() do
+        local remainder = math.ceil(bonus / value_scale - 0.01)
+        if not entry.field_is_enabled[field] then
+            remainder = 0
         end
-        if entry.field_defaults[field] ~= nil then
-            new_value = new_value + entry.field_defaults[field](force)
+        local pending_toggles = {}
+        for n = entry.field_technology.count - 1, 0, -1 do
+            local value = math.pow(2, n)
+            print(internal_technology_format:format(n, field))
+            local tech = force.technologies[internal_technology_format:format(n, field)]
+            if remainder >= value then
+                remainder = remainder - value
+                if not tech.researched then
+                    plog('enabled internal tech:  %q', tech.name)
+                    tech.researched = true
+                    tech.enabled = false
+                end
+            elseif tech.researched then
+                pending_toggles[#pending_toggles + 1] = tech
+            end
         end
 
-        if old_value ~= new_value then
-            plog('force %q modifying %q: %s => %s', force.name, field, old_value, new_value)
-            force[field] = new_value
+        for _, tech in ipairs(pending_toggles) do
+            plog('disabling internal tech: %q', tech.name)
+            tech.researched = false
+            tech.enabled = false
         end
     end
 end
@@ -157,34 +162,21 @@ end
 --[=[
     Updates the field values for a specific force.
     @param  force          LuaForce
-    @param  all_fields     any bool
 ]=]
-local function update_for_force(force, all_fields)
+local function update_for_force(force)
     for _, entry in ipairs(config_ext) do
         if entry.is_enabled then
-            update_for_force_and_entry(force, entry, all_fields)
+            update_for_force_and_entry(force, entry)
         end
     end
 end
 
 --[=[
     Updates the field values for a all forces.
-    @param  all_fields     any bool
 ]=]
-local function update_for_all_forces(all_fields)
+local function update_for_all_forces()
     for _, force in pairs(game.forces) do
-        update_for_force(force, all_fields)
-    end
-end
-
---[=[
-    Updates every possible field on every force.
-]=]
-local function update_all_including_disabled()
-    for _, force in pairs(game.forces) do
-        for _, entry in ipairs(config_ext) do
-            update_for_force_and_entry(force, entry, true)
-        end
+        update_for_force(force)
     end
 end
 
@@ -233,7 +225,7 @@ end)
 -- Handles the modifications of the character bonus factors based on settings.
 script.on_event(defines.events.on_runtime_mod_setting_changed, function (event)
     plog('runtime settings changed, performing a reset for enabled entries and all fields')
-    update_for_all_forces(true)
+    update_for_all_forces()
 end)
 
 local function unlock_depended_upon_researches(force)
@@ -253,11 +245,11 @@ local function unlock_depended_upon_researches(force)
             for tier_index, tier in flua.for_pairs(entry.config, #entry.config, 2, -1)
                 :filter(function (_, tier) return tier.requirement ~= 0 end)
                 :filter(function (index, tier)
-                    local tech_name = tech_format:format(entry.name, index, 1)
+                    local tech_name = player_technology_format:format(entry.name, index, 1)
                     return techs[tech_name].researched
                 end)
                 :iter() do
-                local previous = techs[tech_format:format(entry.name, tier_index - 1, tier.requirement)]
+                local previous = techs[player_technology_format:format(entry.name, tier_index - 1, tier.requirement)]
                 if not previous.researched then
                     plog('unlocked dependency \'%s\'', previous.name)
                     previous.researched = true
@@ -269,13 +261,13 @@ local function unlock_depended_upon_researches(force)
             for tier_index, tier in ipairs(entry.config) do
                 local max_unlocked = flua.reverse_range(tier.tier_depth)
                     :first(function (index)
-                        local tech_name = tech_format:format(entry.name, tier_index, index)
+                        local tech_name = player_technology_format:format(entry.name, tier_index, index)
                         return techs[tech_name].researched
                     end)
                 if max_unlocked ~= nil then
                     for tech in flua.reverse_range(max_unlocked - 1)
                         :filtermap(function (index)
-                            local tech_name = tech_format:format(entry.name, tier_index, index)
+                            local tech_name = player_technology_format:format(entry.name, tier_index, index)
                             local tech = techs[tech_name]
                             return (not tech.researched) and tech or nil
                         end):iter() do
@@ -300,7 +292,6 @@ script.on_configuration_changed(function (changes)
         global[k] = nil
     end
 
-    -- Transforming the old global table to the new global table
     local qol_research = changes.mod_changes.qol_research
     local upgrade_from_v01 = false
     if qol_research ~= nil then
@@ -310,18 +301,15 @@ script.on_configuration_changed(function (changes)
             version_major, version_minor = tonumber(version_major), tonumber(version_minor)
             plog('%s == %s.%s', old_version, version_major, version_minor)
             upgrade_from_v01 = version_major == 0 and version_minor == 1
-            if version_major == 1 and version_minor == 1 then
-                pprint('resetting all research bonus previously misapplied')
-            end
         end
     end
 
+    local restore_count = flua.wrap(2, pairs(game.forces))
+        :map(function (_, force)
+            return unlock_depended_upon_researches(force)
+        end, 1)
+        :sum()
     if upgrade_from_v01 then
-        local restore_count = flua.wrap(2, pairs(game.forces))
-            :map(function (_, force)
-                return unlock_depended_upon_researches(force)
-            end, 1)
-            :sum()
         if restore_count == 0 then
             pprint('Upgraded from v0.1 to v2.0, you may have lost some researches.')
         elseif restore_count == 1 then
@@ -329,31 +317,17 @@ script.on_configuration_changed(function (changes)
         else
             pprint(('Upgraded from v0.1 to v2.0. %s researches were restored, but some may be lost.'):format(restore_count))
         end
-        init_global_table()
+    elseif restore_count > 0 then
+        pprint(('Technology tree changed, %s depended upon researches were automatically unlocked.'):format(restore_count))
     end
 
-    -- If startup settings were changed, reset all entries' bonuses
-    if changes.mod_startup_settings_changed then
-        update_all_including_disabled()
-    end
+    update_for_all_forces()
 end)
 
-
-
-commands.add_command('qol-reset', [[Sets all enabled Quality of Life based bonuses to the default values, and reapplying any bonuses from settings/research.
-Execute this command to fix interoperability issues with other mods.]], function (event)
+commands.add_command('qol-reset', [[Syncs all technology effects, run this after using commands to undo research.]], function (event)
     if game.players[event.player_index].admin then
         pprint('resetting, check factorio-current.log if you want details')
-        update_for_all_forces(true)
-    else
-        player.print('[qol] you must be an admin to run this command')
-    end
-end)
-commands.add_command('qol-reset-all', [[Sets ALL Quality of Life based bonuses (including the ones disabled by settings) to the default values, and reapplying any bonuses from settings/research.
-Execute this command to fix interoperability issues with other mods.]], function (event)
-    if game.players[event.player_index].admin then
-        pprint('resetting all, check factorio-current.log if you want details')
-        update_all_including_disabled()
+        update_for_all_forces()
     else
         player.print('[qol] you must be an admin to run this command')
     end

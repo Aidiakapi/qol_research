@@ -1,20 +1,21 @@
 local flua = require('flua')
 local config_ext = flua.ivalues(require('config_ext'))
 local data_utils = require('data_utils')
-local tech_format = 'qol-%s-%d-%d'
+local player_technology_format = 'qol-%s-%d-%d'
+local internal_technology_format = 'qolinternal-%d-%s-%d'
 
 local ordering_table = data_utils.create_ordering_table(math.max(
     config_ext:map(function (entry) return #entry.config end):max(),
     config_ext:count()
 ))
 
-local extensions = config_ext
+local player_technologies = config_ext
     :filter(function (entry)
-        log(('%s: is_research_enabled: %q'):format(entry.name, tostring(entry.is_research_enabled)))
+        -- log(('%s: is_research_enabled: %q'):format(entry.name, tostring(entry.is_research_enabled)))
         return entry.is_research_enabled
     end)
 
-extensions = extensions:flatmap(function (entry)
+player_technologies = player_technologies:flatmap(function (entry)
     local config = entry.config
     local technology_icon = ('__qol_research__/graphics/%s.png'):format(entry.name)
     return flua.ipairs(config):flatmap(function (tier_index, tier)
@@ -26,7 +27,7 @@ extensions = extensions:flatmap(function (entry)
         local tier_order = ('qol-research-%s-%s'):format(ordering_table[entry.index], ordering_table[tier_index])
         local prerequisites
         if tier.requirement > 0 then
-            prerequisites = { (tech_format):format(entry.name, tier_index - 1, tier.requirement) }
+            prerequisites = { (player_technology_format):format(entry.name, tier_index - 1, tier.requirement) }
         end
         if tier.tier_depth == 0 then
             if tier_index ~= #config then
@@ -34,7 +35,7 @@ extensions = extensions:flatmap(function (entry)
             end
             return flua.duplicate(1, {
                 type = 'technology',
-                name = (tech_format):format(entry.name, tier_index, 1),
+                name = (player_technology_format):format(entry.name, tier_index, 1),
                 localised_description = localised_description,
                 icon = technology_icon,
                 icon_size = 128,
@@ -56,12 +57,12 @@ extensions = extensions:flatmap(function (entry)
             if technology_index == 1 then
                 current_prerequisites = prerequisites
             else
-                current_prerequisites = { (tech_format):format(entry.name, tier_index, technology_index - 1) }
+                current_prerequisites = { (player_technology_format):format(entry.name, tier_index, technology_index - 1) }
             end
 
             return {
                 type = 'technology',
-                name = (tech_format):format(entry.name, tier_index, technology_index),
+                name = (player_technology_format):format(entry.name, tier_index, technology_index),
                 localised_description = localised_description,
                 icon = technology_icon,
                 icon_size = 128,
@@ -79,6 +80,54 @@ extensions = extensions:flatmap(function (entry)
     end, 1)
 end, 1):list()
 
-if #extensions > 0 then
-    data:extend(extensions)
+if #player_technologies > 0 then
+    data:extend(player_technologies)
+end
+
+local internal_technologies = config_ext
+    :filter(function (entry) return entry.is_enabled end)
+    :flatmap(function (entry)
+        return entry.fields:flatmap(function (field)
+            return flua.range(0, entry.field_technology.count - 1):flatmap(function (index)
+                return flua.values({ {
+                    type = 'technology',
+                    name = internal_technology_format:format(index, field, 1),
+                    icon = '__qol_research__/graphics/blank.png',
+                    icon_size = 1,
+                    enabled = false,
+                    unit =
+                    {
+                        count = 1,
+                        time = 1,
+                        ingredients = { }
+                    },
+                    effects =
+                    { {
+                        type = field,
+                        modifier = entry.field_technology.value_scale * math.pow(2, index),
+                    } },
+                    order = '~~~~~~~~~~~~~~',
+                    upgrade = true,
+                }, {
+                    type = 'technology',
+                    name = internal_technology_format:format(index, field, 2),
+                    icon = '__qol_research__/graphics/blank.png',
+                    icon_size = 1,
+                    enabled = false,
+                    unit =
+                    {
+                        count = 1,
+                        time = 1,
+                        ingredients = { }
+                    },
+                    order = '~~~~~~~~~~~~~~',
+                    upgrade = true,
+                } })
+            end)
+        end)
+    end)
+    :list()
+
+if #internal_technologies > 0 then
+    data:extend(internal_technologies)
 end

@@ -72,7 +72,11 @@ local config = {
             '3,5,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '3,0,0.05,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
-        fields = { 'manual_crafting_speed_modifier' },
+        fields = { 'character-crafting-speed' },
+        field_technology = {
+            value_scale = 0.01,
+            count = 20,
+        },
         description_factory = percentage_description
     },
     {
@@ -84,8 +88,11 @@ local config = {
             '1,2,5,25,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '1,2,5,30,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1'
         },
-        fields = { 'character_inventory_slots_bonus' },
-        field_default_sum = 0,
+        fields = { 'character-inventory-slots-bonus' },
+        field_technology = {
+            value_scale = 1,
+            count = 12,
+        },
         description_factory = pluralize_description('slot')
     },
     {
@@ -98,7 +105,11 @@ local config = {
             '3,5,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '3,0,0.05,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
-        fields = { 'manual_mining_speed_modifier' },
+        fields = { 'character-mining-speed' },
+        field_technology = {
+            value_scale = 0.01,
+            count = 20,
+        },
         description_factory = percentage_description
     },
     {
@@ -111,7 +122,11 @@ local config = {
             '2,4,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '2,0,0.05,30,200*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         },
-        fields = { 'character_running_speed_modifier' },
+        fields = { 'character-running-speed' },
+        field_technology = {
+            value_scale = 0.01,
+            count = 20,
+        },
         description_factory = percentage_description
     },
     {
@@ -126,15 +141,19 @@ local config = {
         },
         fields =
         {
-            'character_build_distance_bonus',
-            'character_item_drop_distance_bonus',
-            'character_resource_reach_distance_bonus',
-            'character_reach_distance_bonus',
+            'character-build-distance',
+            'character-item-drop-distance',
+            'character-resource-reach-distance',
+            'character-reach-distance',
         },
         field_settings =
         {
-            ['character_item_drop_distance_bonus'] = 'item-drop-distance',
-            ['character_resource_reach_distance_bonus'] = 'resource-reach-distance'
+            ['character-item-drop-distance'] = 'item-drop-distance',
+            ['character-resource-reach-distance'] = 'resource-reach-distance'
+        },
+        field_technology = {
+            value_scale = 1,
+            count = 20,
         },
         description_factory = pluralize_description('tile')
     },
@@ -145,46 +164,13 @@ local config = {
             '0,1,1,15,500,science-pack-1,1',
             '1,1,1,30,500,science-pack-1,1,science-pack-2,1'
         },
-        fields = {
-            'quickbar_count'
-        },
-        field_defaults = {
-            ['quickbar_count'] = function (force)
-                local base = 1
-                for tech_name, modifier in pairs(load_technology_quickbar_bonus()) do
-                    if force.technologies[tech_name].researched then
-                        base = base + modifier
-                    end
-                end
-                return base
-            end
+        fields = { 'quick-bar-count' },
+        field_technology = {
+            value_scale = 1,
+            count = 5,
         },
         description_factory = pluralize_description('belt')
     }
 }
-for _, entry in pairs(config) do
-    if type(entry.default_config) == 'table' then
-        entry.default_config = table.concat(entry.default_config, ':')
-    end
-end
-
-do
-    local technology_quickbar_bonus
-    load_technology_quickbar_bonus = function ()
-        if technology_quickbar_bonus ~= nil then
-            return technology_quickbar_bonus
-        end
-
-        technology_quickbar_bonus = {}
-        for _, prototype in pairs(game.technology_prototypes) do
-            for _, effect in pairs(prototype.effects) do
-                if effect.type == 'quick-bar-count' then
-                    technology_quickbar_bonus[prototype.name] = effect.modifier
-                end
-            end
-        end
-        return technology_quickbar_bonus
-    end
-end
 
 return config

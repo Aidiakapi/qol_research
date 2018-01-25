@@ -25,9 +25,11 @@ function getters:field_setting_names()
 end
 
 function getters:config()
-    local config_str = settings.startup[self.setting_names.research_config].value
-    if not config_str or #config_str == 0 then
-        config_str = config[self.index].default_config
+    local config_entries = settings.startup[self.setting_names.research_config].value
+    if not config_entries or #config_entries == 0 then
+        config_entries = flua.ivalues(config[self.index].default_config)
+    else
+        config_entries = flua.wrap(1, config_str:gmatch('[^: ]+'))
     end
 
     local function parse_assert(condition, tier_index, message)
@@ -37,7 +39,7 @@ function getters:config()
     end
 
     -- Parse the config
-    local config = flua.wrap(1, config_str:gmatch('([^:]+):?'))
+    local config = config_entries
         :map(function (tier_str, index)
             local properties = flua.wrap(1, tier_str:gmatch('([^:,]+),?')):list()
             parse_assert(#properties >= 7 and #properties % 2 == 1, index, 'incorrect number of properties')
@@ -83,12 +85,15 @@ function getters:config()
     return true, config
 end
 
-function getters:fields_filtered()
-    return false, self.fields:filter(function (field_name)
-        local field_setting_name = self.field_settings[field_name]
-        if not field_setting_name then return true end
-        return settings.global[self.setting_names.field_toggle:format(field_setting_name)].value
-    end)
+function getters:field_is_enabled()
+    return true, setmetatable({}, {
+        __index = function (__self, field_name)
+            local field_setting_name = self.field_settings[field_name]
+            if not field_setting_name then return true end
+            return settings.global[self.setting_names.field_toggle:format(field_setting_name)].value
+        end,
+        __newindex = function () error('cannot assign') end,
+    })
 end
 
 local metatable = {}
@@ -124,8 +129,8 @@ return flua.ipairs(config):map(function (index, entry)
         type = entry.type,
         description_factory = entry.description_factory,
         fields = flua.ivalues(entry.fields),
-        field_defaults = entry.field_defaults or {},
         field_settings = entry.field_settings or {},
+        field_technology = entry.field_technology,
         setting_names = setting_names,
         field_setting_map = field_setting_map
     }, metatable)
