@@ -165,7 +165,7 @@ local config = {
             '0,1,1,15,500,science-pack-1,1',
             '1,1,1,30,500,science-pack-1,1,science-pack-2,1'
         },
-        fields = { 'quick-bar-count' },
+        fields = { 'num-quick-bars' },
         field_technology = {
             value_scale = 1,
             count = 5,
