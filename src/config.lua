@@ -2,6 +2,10 @@
 
     You can configure multiple sets of research tiers, each set separated by a colon (:).
 
+    If you want your technology configuration to have prerequisites, append this to the config string:
+    ;prerequisite-1,prerequisite-2,prerequisite-3
+    Note the semi-colon at the start!
+
     Each set has several fields defining amount of levels, cost and ingredients, each field
     is separated by a comma.
 
@@ -59,19 +63,20 @@
 
 local load_technology_quickbar_bonus
 
-local percentage_description = function (value) return ('%g%%'):format(value * 100) end
-local pluralize_description = function (unit) return function (value) return ('%d %s%s'):format(value, unit, value == 1 and '' or 's') end end
+local function config(t) return table.concat(t, ':') end
+local function percentage_description(value) return ('%g%%'):format(value * 100) end
+local function pluralize_description(unit) return function (value) return ('%d %s%s'):format(value, unit, value == 1 and '' or 's') end end
 local config = {
     {
         name = 'crafting-speed',
         type = 'double',
-        default_config = {
+        default_config = config({
             '0,5,0.20,10,150*L,science-pack-1,1',
             '3,5,0.10,15,175*L,science-pack-1,1,science-pack-2,1',
             '3,5,0.05,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '3,5,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '5,0,0.05,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
-        },
+        }),
         fields = { 'character-crafting-speed' },
         field_technology = {
             value_scale = 0.01,
@@ -82,13 +87,13 @@ local config = {
     {
         name = 'inventory-size',
         type = 'int',
-        default_config = {
+        default_config = config({
             '0,2,5,10,150*L,science-pack-1,1',
             '1,2,5,15,175*L,science-pack-1,1,science-pack-2,1',
             '1,2,5,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '1,2,5,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '2,0,5,30,5000*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
-        },
+        }),
         fields = { 'character-inventory-slots-bonus' },
         field_technology = {
             value_scale = 1,
@@ -99,13 +104,13 @@ local config = {
     {
         name = 'mining-speed',
         type = 'double',
-        default_config = {
+        default_config = config({
             '0,5,0.20,10,150*L,science-pack-1,1',
             '3,5,0.10,15,175*L,science-pack-1,1,science-pack-2,1',
             '3,5,0.05,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '3,5,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '5,0,0.05,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
-        },
+        }),
         fields = { 'character-mining-speed' },
         field_technology = {
             value_scale = 0.01,
@@ -116,13 +121,13 @@ local config = {
     {
         name = 'movement-speed',
         type = 'double',
-        default_config = {
+        default_config = config({
             '0,4,0.05,10,150*L,science-pack-1,1',
             '2,4,0.05,15,175*L,science-pack-1,1,science-pack-2,1',
             '2,4,0.05,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '2,4,0.05,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '4,0,0.05,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
-        },
+        }),
         fields = { 'character-running-speed' },
         field_technology = {
             value_scale = 0.01,
@@ -133,13 +138,13 @@ local config = {
     {
         name = 'player-reach',
         type = 'int',
-        default_config = { 
+        default_config = config({ 
             '0,4,1,10,150*L,science-pack-1,1',
             '2,4,1,15,175*L,science-pack-1,1,science-pack-2,1',
             '2,4,1,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '2,4,1,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
             '4,0,1,30,250*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
-        },
+        }),
         fields =
         {
             'character-build-distance',
@@ -161,16 +166,31 @@ local config = {
     {
         name = 'toolbelts',
         type = 'int',
-        default_config = {
+        default_config = config({
             '0,1,1,15,500,science-pack-1,1',
             '1,1,1,30,500,science-pack-1,1,science-pack-2,1'
-        },
+        }),
         fields = { 'quick-bar-count' },
         field_technology = {
             value_scale = 1,
             count = 5,
         },
         description_factory = pluralize_description('belt')
+    },
+    {
+        name = 'logistic-slots',
+        type = 'int',
+        default_config = config({
+            '0,2,3,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
+            '1,2,3,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
+            '2,0,3,30,500*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+        }) .. ';character-logistic-slots-2',
+        fields = { 'character-logistic-slots' },
+        field_technology = {
+            value_scale = 1,
+            count = 11,
+        },
+        description_factory = pluralize_description('slot')
     }
 }
 

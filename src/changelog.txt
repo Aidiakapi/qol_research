@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.2.3
+Date: 28. 01. 2018
+  Features:
+    - Added character logistic request slot bonuses.
+    - Added ability to specify prerequisites in custom config (see config.lua).
+---------------------------------------------------------------------------------------------------
 Version: 2.2.1
 Date: 27. 01. 2018
   Changes:

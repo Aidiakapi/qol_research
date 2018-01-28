@@ -4,7 +4,7 @@
 
     Since v2.0.0 no more state is stored in the
     global table, and instead all information can
-    be derived from the on_configuration_changed.
+    be derived from the researched technologies.
 
 ]=]
 

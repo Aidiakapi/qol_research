@@ -26,7 +26,9 @@ player_technologies = player_technologies:flatmap(function (entry)
         }
         local tier_order = ('qol-research-%s-%s'):format(ordering_table[entry.index], ordering_table[tier_index])
         local prerequisites
-        if tier.requirement > 0 then
+        if tier.requirement == 0 then
+            prerequisites = table.deepcopy(config.prerequisites)
+        else
             prerequisites = { (player_technology_format):format(entry.name, tier_index - 1, tier.requirement) }
         end
         if tier.tier_depth == 0 then

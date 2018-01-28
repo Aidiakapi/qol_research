@@ -27,9 +27,7 @@ end
 function getters:config()
     local config_entries = settings.startup[self.setting_names.research_config].value
     if not config_entries or #config_entries == 0 then
-        config_entries = flua.ivalues(config[self.index].default_config)
-    else
-        config_entries = flua.wrap(1, config_str:gmatch('[^: ]+'))
+        config_entries = config[self.index].default_config
     end
 
     local function parse_assert(condition, tier_index, message)
@@ -39,7 +37,13 @@ function getters:config()
     end
 
     -- Parse the config
-    local config = config_entries
+    local _, _, remainder, prerequisites = config_entries:find('^(.+);([^;]+)$')
+    if prerequisites then
+        config_entries = remainder
+        prerequisites = flua.wrap(1, prerequisites:gmatch('[^,]+')):list()
+    end
+
+    local config = flua.wrap(1, config_entries:gmatch('[^:]+'))
         :flatmap(function (tier_str, index)
             local properties = flua.wrap(1, tier_str:gmatch('([^:,]+),?')):list()
             parse_assert(#properties >= 7 and #properties % 2 == 1, index, 'incorrect number of properties')
@@ -84,6 +88,8 @@ function getters:config()
     for i = 1, #config - 1 do
         parse_assert(config[i].tier_depth >= config[i + 1].requirement, i + 1, 'tier requirement cannot be greater than previous tier depth')
     end
+
+    config.prerequisites = prerequisites
 
     return true, config
 end
