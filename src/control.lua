@@ -134,10 +134,11 @@ local function update_for_force_and_entry(force, entry)
         if not entry.field_is_enabled[field] then
             remainder = 0
         end
-        local pending_toggles = {}
+        local pending_disables = {}
         for n = entry.field_technology.count - 1, 0, -1 do
             local value = math.pow(2, n)
             local tech = force.technologies[internal_technology_format:format(field, n + 1)]
+            
             if remainder >= value then
                 remainder = remainder - value
                 if not tech.researched then
@@ -145,12 +146,12 @@ local function update_for_force_and_entry(force, entry)
                     tech.researched = true
                 end
             elseif tech.researched then
-                plog('disabled internal tech:  %q (%d * %f)', tech.name, value, value_scale)
-                pending_toggles[#pending_toggles + 1] = tech
+                plog('disabled internal tech: %q (%d * %f)', tech.name, value, value_scale)
+                pending_disables[#pending_disables + 1] = tech
             end
         end
 
-        for _, tech in ipairs(pending_toggles) do
+        for _, tech in ipairs(pending_disables) do
             tech.researched = false
             tech.enabled = false
         end

@@ -95,8 +95,10 @@ local internal_technologies = config_ext
                 return {
                     type = 'technology',
                     name = internal_technology_format:format(field, index + 1),
-                    icon = '__qol_research__/graphics/blank.png',
-                    icon_size = 1,
+                    localised_name = { 'qol-internal-tech.name' },
+                    localised_description = { 'qol-internal-tech.description' },
+                    icon = '__qol_research__/graphics/internal-tech.png',
+                    icon_size = 128,
                     enabled = false,
                     unit =
                     {
@@ -117,8 +119,10 @@ local internal_technologies = config_ext
             :concat(flua.duplicate(1, {
                 type = 'technology',
                 name = internal_technology_format:format(field, entry.field_technology.count + 1),
-                icon = '__qol_research__/graphics/blank.png',
-                icon_size = 1,
+                localised_name = { 'qol-internal-tech.name' },
+                localised_description = { 'qol-internal-tech.description' },
+                icon = '__qol_research__/graphics/internal-tech.png',
+                icon_size = 128,
                 enabled = false,
                 unit =
                 {
