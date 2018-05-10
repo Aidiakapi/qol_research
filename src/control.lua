@@ -221,11 +221,13 @@ script.on_event(defines.events.on_research_finished, function (event)
     update_for_force_and_entry(force, entry)
 end)
 
--- Handles the modifications of the character bonus factors based on settings.
-script.on_event(defines.events.on_runtime_mod_setting_changed, function (event)
-    plog('runtime settings changed, performing a reset for enabled entries and all fields')
+-- Handles the modifications of the character bonus factors based on settings
+local function on_init_or_runtime_mod_setting_changed()
+    plog('init/runtime settings changed')
     update_for_all_forces()
-end)
+end
+script.on_init(on_init_or_runtime_mod_setting_changed)
+script.on_event(defines.events.on_runtime_mod_setting_changed, on_init_or_runtime_mod_setting_changed)
 
 local function unlock_depended_upon_researches(force)
     suppress_research_unlocks = true
