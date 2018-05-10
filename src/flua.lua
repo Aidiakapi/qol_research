@@ -2,7 +2,7 @@
 
     Flua
     Functional iterators and adapters.
-    Version 0.1.0
+    Version 0.1.1
 
     Types:
       flua
@@ -54,6 +54,7 @@
       iterator:iter()
       iterator:list()
       iterator:table()
+      iterator:group_by(group_selector[, key_selector], value_selector)
 
       iterator:map(func[, new_width])
       iterator:flatmap(func[, new_width])
@@ -120,6 +121,10 @@ if FLUA_DISABLE_ASSERT then
     assert = function () end
 else
     assert = lua_assert
+end
+
+local function identity(...)
+    return ...
 end
 
 local function deep_copy(value)
@@ -631,6 +636,76 @@ function api:table()
         table[k] = v
     end
     return table
+end
+
+--[=[
+    iterator:group_by(group_selector[, key_selector], value_selector)
+    Creates a table that groups lists or tables together.
+
+    Params:
+      group_selector  (value_1, ..., value_n) => any
+        Selects a value to group by.
+      key_selector  (value_1, ..., value_n) => any
+        Optional. Selects a key to group by. Default: index
+      value_selector  (value_1, ..., value_n) => any
+        Selects a value for the group entry.
+    
+    Remark:
+      Performs iteration.
+      If group_selector, key_selector or value_selector
+      return nil, the entry is skipped.
+      If key_selector is omitted, the values are added
+      into a list.
+      If key_selector is present, and returns the same
+      key multiple times, the last entry's value is used.
+    
+    Returns:
+      A table of keys mapping to tables or lists of values.
+]=]
+function api:group_by(group_selector, key_selector, value_selector)
+    assert(type(group_selector) == 'function', 'group_selector must be a function')
+    if value_selector == nil then
+        key_selector, value_selector = value_selector, key_selector
+    end
+    assert(key_selector == nil or type(key_selector) == 'function', 'key_selector must be a function')
+    assert(type(value_selector) == 'function', 'value_selector must be a function')
+    
+    local grouping = {}
+    if key_selector == nil then
+        for _ in self:filter(function (...)
+            local group = group_selector(...)
+            if group == nil then return false end
+            local value = value_selector(...)
+            if value == nil then return false end
+            local list = grouping[group]
+            if not list then
+                list = {}
+                grouping[group] = list
+            end
+            list[#list + 1] = value
+            return false
+        end):iter() do
+        end
+    else
+        for _ in self:filter(function (...)
+            local group = group_selector(...)
+            if group == nil then return false end
+            local key = key_selector(...)
+            if key == nil then return false end
+            local value = value_selector(...)
+            if value == nil then return false end
+            local table = grouping[group]
+            if not table then
+                table = {}
+                grouping[group] = table
+            end
+            table[key] = value
+            return false
+        end):iter() do
+        end
+    end
+
+    return grouping
 end
 
 --[=[
