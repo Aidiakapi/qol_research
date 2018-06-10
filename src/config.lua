@@ -92,7 +92,7 @@ local config = {
             '1,2,5,15,175*L,science-pack-1,1,science-pack-2,1',
             '1,2,5,20,225*L,science-pack-1,1,science-pack-2,1,science-pack-3,1',
             '1,2,5,25,300*L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1',
-            '2,0,5,30,5000*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
+            '2,0,5,30,500*2^L,science-pack-1,1,science-pack-2,1,science-pack-3,1,high-tech-science-pack,1,space-science-pack,1'
         }),
         fields = { 'character-inventory-slots-bonus' },
         field_technology = {
