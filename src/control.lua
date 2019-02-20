@@ -14,10 +14,13 @@ local setting_name_formats = require('defines.setting_name_formats')
 local player_technology_format = 'qol-%s-%d-%d'
 local internal_technology_format = 'qolinternal-%s-%d'
 
-local suppress_research_unlocks = false
+local is_logging_enabled = false
+local should_suppress_research_unlocks = false
 
 local function plog(str, ...)
-    log(('[qol] ' .. str):format(...))
+    if is_logging_enabled then
+        log(('[qol] ' .. str):format(...))
+    end
 end
 
 local function pprint(...)
@@ -210,7 +213,7 @@ end
 
 -- Handles adding bonuses for research 
 script.on_event(defines.events.on_research_finished, function (event)
-    if suppress_research_unlocks then return end
+    if should_suppress_research_unlocks then return end
     local research = event.research
     local force = research.force
 
@@ -230,7 +233,7 @@ script.on_init(on_init_or_runtime_mod_setting_changed)
 script.on_event(defines.events.on_runtime_mod_setting_changed, on_init_or_runtime_mod_setting_changed)
 
 local function unlock_depended_upon_researches(force)
-    suppress_research_unlocks = true
+    should_suppress_research_unlocks = true
     local unlocked_total = 0
     local unlocked_previous = nil
     local techs = force.technologies
@@ -281,7 +284,7 @@ local function unlock_depended_upon_researches(force)
         end
     end
     
-    suppress_research_unlocks = false
+    should_suppress_research_unlocks = false
     return unlocked_total
 end
 
@@ -337,10 +340,14 @@ script.on_configuration_changed(function (changes)
     end
 end)
 
-commands.add_command('qol-reset', [[Syncs all technology effects, run this after using commands to undo research.]], function (event)
+commands.add_command('qol-reset', [[Syncs all technology effects, you can run this manually after using commands or mods to undo research.]], function (event)
     if game.players[event.player_index].admin then
+        local was_logging_enabled = is_logging_enabled
+        is_logging_enabled = true
         pprint('resetting, check factorio-current.log if you want details')
         update_for_all_forces()
+        plog('reset completed')
+        is_logging_enabled = was_logging_enabled
     else
         player.print('[qol] you must be an admin to run this command')
     end

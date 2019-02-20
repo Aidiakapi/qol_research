@@ -7,6 +7,7 @@ Date: 15. 02. 2019
     - Increase levels in upper two tiers of inventory size upgrades from 2 to 4, this is to compensate for the lack of toolbelt research.
     - Reduced the levels per tier of player reach from 4 to 3, the base game now has a reach of 10, instead of 6.
     - Crafting speed, player mining speed, player reach's higher tier researches now requires production instead of utility science packs.
+    - Disable verbose logging by default.
   Removed:
     - Toolbelt upgrades (this is now in the base game under Options => Interface => Active quickbars).
     - Settings to disable a particular category, this setting was rather redundant and confusing.
