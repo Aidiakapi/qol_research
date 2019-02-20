@@ -1,4 +1,15 @@
 ---------------------------------------------------------------------------------------------------
+Version: 2.3.0
+Date: 15. 02. 2019
+  Features:
+    - Updated for 0.17
+  Changes:
+    - Increase levels in upper two tiers of inventory size upgrades from 2 to 4, this is to compensate for the lack of toolbelt research.
+    - Reduced the levels per tier of player reach from 4 to 3, the base game now has a reach of 10, instead of 6.
+    - Crafting speed, player mining speed, player reach's higher tier researches now requires production instead of utility science packs.
+  Removed:
+    - Toolbelt upgrades (this is now in the base game under Options => Interface => Active quickbars).
+---------------------------------------------------------------------------------------------------
 Version: 2.2.6
 Date: 11. 06. 2018
   Bugfixes:

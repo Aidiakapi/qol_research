@@ -100,6 +100,7 @@ local internal_technologies = config_ext
                     icon = '__qol_research__/graphics/internal-tech.png',
                     icon_size = 128,
                     enabled = false,
+                    hidden = true,
                     unit =
                     {
                         count = 1,
