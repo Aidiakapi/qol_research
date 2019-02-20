@@ -5,7 +5,8 @@ local setting_name_formats = require('defines.setting_name_formats')
 local getters = {}
 
 function getters:is_enabled()
-    return true, settings.startup[self.setting_names.enabled].value
+    return true, true
+    -- return true, settings.startup[self.setting_names.enabled].value
 end
 
 function getters:is_research_enabled()

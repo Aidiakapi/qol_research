@@ -1,6 +1,5 @@
 return {
     infinite_research_enabled = 'qol-infinite-research-enabled',
-    enabled = 'qol-%s-enabled',
     research_enabled = 'qol-%s-research-enabled',
     research_config = 'qol-%s-research-config',
     flat_bonus = 'qol-%s-flat-bonus',

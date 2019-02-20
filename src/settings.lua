@@ -19,15 +19,6 @@ local function create_infinite_research_flag()
         default_value = true
     }
 end
-local function create_enabled_setting(index, entry)
-    return {
-        name = setting_name_formats.enabled:format(entry.name),
-        type = 'bool-setting',
-        setting_type = 'startup',
-        order = 'b-' .. ordering_table[index * 2 - 1],
-        default_value = true
-    }
-end
 local function create_research_enabled_setting(index, entry)
     return {
         name = setting_name_formats.research_enabled:format(entry.name),
@@ -84,7 +75,6 @@ local function create_field_toggle_settings(index, entry)
 end
 
 data:extend(flua.duplicate(1, create_infinite_research_flag())
-    :concat(config:map(create_enabled_setting, 1))
     :concat(config:map(create_research_enabled_setting, 1))
     :concat(config:map(create_research_config_setting, 1))
     :concat(config:map(create_flat_bonus_setting, 1))

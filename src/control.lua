@@ -142,11 +142,11 @@ local function update_for_force_and_entry(force, entry)
             if remainder >= value then
                 remainder = remainder - value
                 if not tech.researched then
-                    plog('enabled internal tech:  %q (%d * %f)', tech.name, value, value_scale)
+                    plog(' enabled internal tech: %q (%d * %f) for force %q', tech.name, value, value_scale, force.name)
                     tech.researched = true
                 end
             elseif tech.researched then
-                plog('disabled internal tech: %q (%d * %f)', tech.name, value, value_scale)
+                plog('disabled internal tech: %q (%d * %f) for force %q', tech.name, value, value_scale, force.name)
                 pending_disables[#pending_disables + 1] = tech
             end
         end
