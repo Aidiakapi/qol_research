@@ -103,11 +103,11 @@ local config = {
         name = 'mining-speed',
         type = 'double',
         default_config = config({
-            '0,5,0.20,10,150*L,automation-science-pack,1',
-            '3,5,0.10,15,175*L,automation-science-pack,1,logistic-science-pack,1',
-            '3,5,0.05,20,225*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1',
-            '3,5,0.05,25,300*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1,production-science-pack,1',
-            '5,0,0.05,30,250*2^L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1,production-science-pack,1,space-science-pack,1'
+            '0,5,0.30,10,150*L,automation-science-pack,1',
+            '3,5,0.20,15,175*L,automation-science-pack,1,logistic-science-pack,1',
+            '3,5,0.10,20,225*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1',
+            '3,5,0.10,25,300*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1,production-science-pack,1',
+            '5,0,0.10,30,250*2^L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1,production-science-pack,1,space-science-pack,1'
         }),
         fields = { 'character-mining-speed' },
         field_technology = {
