@@ -161,21 +161,6 @@ local config = {
         },
         description_factory = pluralize_description('tile')
     },
-    {
-        name = 'logistic-slots',
-        type = 'int',
-        default_config = config({
-            '0,2,3,20,225*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1',
-            '1,2,3,25,300*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1,utility-science-pack,1',
-            '2,0,3,30,500*2^L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1,utility-science-pack,1,space-science-pack,1'
-        }) .. ';character-logistic-slots-2',
-        fields = { 'character-logistic-slots' },
-        field_technology = {
-            value_scale = 1,
-            count = 11,
-        },
-        description_factory = pluralize_description('slot')
-    }
 }
 
 return config
