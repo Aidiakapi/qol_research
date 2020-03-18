@@ -64,7 +64,7 @@
 local function config(t) return table.concat(t, ':') end
 local function percentage_description(value) return ('%g%%'):format(value * 100) end
 local function pluralize_description(unit) return function (value) return ('%d %s%s'):format(value, unit, value == 1 and '' or 's') end end
-local config = {
+local config_obj = {
     {
         name = 'crafting-speed',
         type = 'double',
@@ -136,7 +136,7 @@ local config = {
     {
         name = 'player-reach',
         type = 'int',
-        default_config = config({ 
+        default_config = config({
             '0,3,1,10,150*L,automation-science-pack,1',
             '2,3,1,15,175*L,automation-science-pack,1,logistic-science-pack,1',
             '2,3,1,20,225*L,automation-science-pack,1,logistic-science-pack,1,chemical-science-pack,1',
@@ -163,4 +163,4 @@ local config = {
     },
 }
 
-return config
+return config_obj

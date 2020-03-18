@@ -1,5 +1,5 @@
 --[=[
-    
+
     File containing the primary logic for the mod.
 
     Since v2.0.0 no more state is stored in the
@@ -10,7 +10,6 @@
 
 local flua = require('flua')
 local config_ext = require('config_ext')
-local setting_name_formats = require('defines.setting_name_formats')
 local player_technology_format = 'qol-%s-%d-%d'
 local internal_technology_format = 'qolinternal-%s-%d'
 
@@ -62,7 +61,7 @@ local function calculate_research_bonus_at(entry, levels, multiplier)
     if multiplier == nil then
         multiplier = entry.setting_multiplier
     end
-    
+
     local value = flua.ipairs(entry.config)
         :map(function (index, tier)
             return tier.effect_value * levels[index]
@@ -81,7 +80,7 @@ end
     @param  force          LuaForce
     @param  entry          ConfigExt
     @param  research_tier  number     Tier index
-    @return number  Index of the tier that was **finished** researching! 
+    @return number  Index of the tier that was **finished** researching!
 --]=]
 local function get_tier_research_level(force, entry, research_tier)
     if not entry.is_research_enabled then return end
@@ -124,7 +123,7 @@ local function update_for_force_and_entry(force, entry)
         local levels = get_tier_research_levels(force, entry)
         bonus = bonus + calculate_research_bonus_at(entry, levels)
     end
-    
+
     if bonus < 0 then
         plog('detected negative bonus for %q of value %s, clamping', entry.name, bonus)
         bonus = 0
@@ -138,10 +137,10 @@ local function update_for_force_and_entry(force, entry)
             remainder = 0
         end
         local pending_disables = {}
-        for n = entry.field_technology.count - 1, 0, -1 do
+        for n = technology_count - 1, 0, -1 do
             local value = math.pow(2, n)
             local tech = force.technologies[internal_technology_format:format(field, n + 1)]
-            
+
             if remainder >= value then
                 remainder = remainder - value
                 if not tech.researched then
@@ -204,20 +203,20 @@ local function parse_research_name(research_name)
         research_level <= 0 or
         research_tier > #entry.config
         then
-        pprint('warning: unknown technology, bug or conflicting mod? ', research.name)
+        pprint('warning: unknown technology, bug or conflicting mod? ', research_name)
         return
     end
 
     return entry, research_tier, research_level
 end
 
--- Handles adding bonuses for research 
+-- Handles adding bonuses for research
 script.on_event(defines.events.on_research_finished, function (event)
     if should_suppress_research_unlocks then return end
     local research = event.research
     local force = research.force
 
-    local entry, research_tier, research_level = parse_research_name(research.name)
+    local entry = parse_research_name(research.name)
     if not entry then return end
 
     plog('research completed %q', research.name)
@@ -243,12 +242,12 @@ local function unlock_depended_upon_researches(force)
         unlocked_previous = unlocked_total
         local entries = flua.ivalues(config_ext)
             :filter(function (entry) return entry.is_research_enabled end)
-        
+
         for entry in entries:iter() do
             -- Unlock researches that higher tiers depend on
             for tier_index, tier in flua.for_pairs(entry.config, #entry.config, 2, -1)
                 :filter(function (_, tier) return tier.requirement ~= 0 end)
-                :filter(function (index, tier)
+                :filter(function (index, _)
                     local tech_name = player_technology_format:format(entry.name, index, 1)
                     return techs[tech_name].researched
                 end)
@@ -283,7 +282,7 @@ local function unlock_depended_upon_researches(force)
             end
         end
     end
-    
+
     should_suppress_research_unlocks = false
     return unlocked_total
 end
@@ -341,13 +340,25 @@ script.on_configuration_changed(function (changes)
 end)
 
 commands.add_command('qol-reset', [[Syncs all technology effects, you can run this manually after using commands or mods to undo research.]], function (event)
-    if game.players[event.player_index].admin then
+    local player = game.players[event.player_index]
+    if player.admin then
         local was_logging_enabled = is_logging_enabled
         is_logging_enabled = true
         pprint('resetting, check factorio-current.log if you want details')
         update_for_all_forces()
         plog('reset completed')
         is_logging_enabled = was_logging_enabled
+    else
+        player.print('[qol] you must be an admin to run this command')
+    end
+end)
+
+commands.add_command('qol-reset-technology-effects', [[Calls reset_technology_effects() for all forces.]], function (event)
+    local player = game.players[event.player_index]
+    if player.admin then
+        for _, force in pairs(game.forces) do
+            force.reset_technology_effects()
+        end
     else
         player.print('[qol] you must be an admin to run this command')
     end
