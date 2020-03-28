@@ -1,16 +1,11 @@
 local flua = require('flua')
-local config = require('config')
+local config_obj = require('config')
 
 local setting_name_formats = require('defines.setting_name_formats')
 local getters = {}
 
-function getters:is_enabled()
-    return true, true
-    -- return true, settings.startup[self.setting_names.enabled].value
-end
-
 function getters:is_research_enabled()
-    return true, self.is_enabled and settings.startup[self.setting_names.research_enabled].value
+    return true, settings.startup[self.setting_names.research_enabled].value
 end
 
 function getters:setting_flat_bonus()
@@ -28,7 +23,7 @@ end
 function getters:config()
     local config_entries = settings.startup[self.setting_names.research_config].value
     if not config_entries or #config_entries == 0 then
-        config_entries = config[self.index].default_config
+        config_entries = config_obj[self.index].default_config
     end
 
     local function parse_assert(condition, tier_index, message)
@@ -58,7 +53,7 @@ function getters:config()
                     ingredients[(i - 5) / 2][2] = v
                 end
             end
-            
+
             -- Parse all other properties
             local requirement = tonumber(properties[1])
             parse_assert(type(requirement) == 'number' and requirement >= 0, index, 'previous tier requirement must be a non-negative number')
@@ -97,7 +92,7 @@ end
 
 function getters:field_is_enabled()
     return true, setmetatable({}, {
-        __index = function (__self, field_name)
+        __index = function (_self, field_name)
             local field_setting_name = self.field_settings[field_name]
             if not field_setting_name then return true end
             return settings.global[self.setting_names.field_toggle:format(field_setting_name)].value
@@ -116,17 +111,17 @@ function metatable.__index(self, key)
         return value
     end
 end
-function metatable.__newindex(self, key, value)
+function metatable.__newindex(_self, _key, _value)
     error('cannot add extra properties to config_ext', 2)
 end
 
-return flua.ipairs(config):map(function (index, entry)
+return flua.ipairs(config_obj):map(function (index, entry)
     local setting_names = flua.pairs(setting_name_formats)
         :map(function (k, v)
             return k, v:format(entry.name)
         end)
         :table()
-    
+
     local field_setting_map = flua.pairs(entry.field_settings)
         :map(function (field_name, setting_name)
             return setting_names.field_toggle:format(setting_name), field_name

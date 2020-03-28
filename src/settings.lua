@@ -5,7 +5,7 @@ local setting_name_formats = require('defines.setting_name_formats')
 
 local ordering_table = data_utils.create_ordering_table(config:count() * 3)
 local flag_ordering_table = data_utils.create_ordering_table(
-    config:filtermap(function (i, v)
+    config:filtermap(function (_i, v)
         return v.field_toggles and #v.field_toggles
     end, 1):max() or 0
 )

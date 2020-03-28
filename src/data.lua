@@ -87,7 +87,6 @@ if #player_technologies > 0 then
 end
 
 local internal_technologies = config_ext
-    :filter(function (entry) return entry.is_enabled end)
     :flatmap(function (entry)
         return entry.fields:flatmap(function (field)
             return flua.range(0, entry.field_technology.count - 1)

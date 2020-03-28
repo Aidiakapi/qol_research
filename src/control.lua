@@ -117,7 +117,6 @@ end
     @param  entry          ConfigExt
 ]=]
 local function update_for_force_and_entry(force, entry)
-    if not entry.is_enabled then return end
     local bonus = entry.setting_flat_bonus
     if entry.is_research_enabled then
         local levels = get_tier_research_levels(force, entry)
@@ -166,9 +165,7 @@ end
 ]=]
 local function update_for_force(force)
     for _, entry in ipairs(config_ext) do
-        if entry.is_enabled then
-            update_for_force_and_entry(force, entry)
-        end
+        update_for_force_and_entry(force, entry)
     end
 end
 
