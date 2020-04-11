@@ -1,8 +1,9 @@
 return {
     infinite_research_enabled = 'qol-infinite-research-enabled',
+    modpack_compatibility_enabled = 'qol-modpack-compatibility-enabled',
     research_enabled = 'qol-%s-research-enabled',
-    research_config = 'qol-%s-research-config',
     flat_bonus = 'qol-%s-flat-bonus',
     multiplier = 'qol-%s-multiplier',
-    field_toggle = 'qol-%s-field-%%s'
+    effect_flag = 'qol-%s-field-%s',
+    custom_config = 'qol-custom-config',
 }

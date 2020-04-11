@@ -1,84 +1,80 @@
-local flua = require('flua')
-local config = flua.ipairs(require('config'))
+local category_list = require('categories').list
 local data_utils = require('data_utils')
-local setting_name_formats = require('defines.setting_name_formats')
+local setting_formats = require('defines.setting_name_formats')
 
-local ordering_table = data_utils.create_ordering_table(config:count() * 3)
-local flag_ordering_table = data_utils.create_ordering_table(
-    config:filtermap(function (_i, v)
-        return v.field_toggles and #v.field_toggles
-    end, 1):max() or 0
-)
+local ordering_table = data_utils.create_ordering_table_for_settings()
+local settings = {}
 
-local function create_infinite_research_flag()
-    return {
-        name = setting_name_formats.infinite_research_enabled,
+-- Startup settings
+settings[#settings + 1] = {
+    name = setting_formats.modpack_compatibility_enabled,
+    type = 'bool-setting',
+    setting_type = 'startup',
+    order = 'a-a',
+    default_value = true,
+}
+settings[#settings + 1] = {
+    name = setting_formats.infinite_research_enabled,
+    type = 'bool-setting',
+    setting_type = 'startup',
+    order = 'a-b',
+    default_value = true,
+}
+for index, category in ipairs(category_list) do
+    settings[#settings + 1] = {
+        name = setting_formats.research_enabled:format(category.name),
         type = 'bool-setting',
         setting_type = 'startup',
-        order = 'a-a',
-        default_value = true
+        order = 'b-' .. ordering_table[index],
+        default_value = true,
     }
 end
-local function create_research_enabled_setting(index, entry)
-    return {
-        name = setting_name_formats.research_enabled:format(entry.name),
-        type = 'bool-setting',
-        setting_type = 'startup',
-        order = 'b-' .. ordering_table[index * 2],
-        default_value = true
-    }
-end
-local function create_research_config_setting(index, entry)
-    return {
-        name = setting_name_formats.research_config:format(entry.name),
-        type = 'string-setting',
-        setting_type = 'startup',
-        order = 'c-' .. ordering_table[index],
-        default_value = '',
-        allow_blank = true
-    }
-end
-local function create_flat_bonus_setting(index, entry)
-    return {
-        name = setting_name_formats.flat_bonus:format(entry.name),
-        type = entry.type .. '-setting',
+settings[#settings + 1] = {
+    name = setting_formats.custom_config,
+    type = 'string-setting',
+    setting_type = 'startup',
+    order = 'c-a',
+    default_value = '',
+    allow_blank = true,
+}
+
+-- Runtime settings
+for index, category in ipairs(category_list) do
+    settings[#settings + 1] = {
+        name = setting_formats.flat_bonus:format(category.name),
+        type = category.type .. '-setting',
         setting_type = 'runtime-global',
-        order = 'd-' .. ordering_table[index * 3 - 2],
+        order = ordering_table[index * 3 - 2] .. '-a',
         default_value = 0,
         minimum_value = 0,
-        maximum_value = 99999
+        maximum_value = 99999,
     }
 end
-local function create_multiplier_setting(index, entry)
-    return {
-        name = setting_name_formats.multiplier:format(entry.name),
+for index, category in ipairs(category_list) do
+    settings[#settings + 1] = {
+        name = setting_formats.multiplier:format(category.name),
         type = 'double-setting',
         setting_type = 'runtime-global',
-        order = 'd-' .. ordering_table[index * 3 - 1],
+        order = ordering_table[index * 3 - 1] .. '-b',
         default_value = 1,
         minimum_value = 0,
-        maximum_value = 999
+        maximum_value = 999,
     }
 end
-local function create_field_toggle_settings(index, entry)
-    return flua.values(entry.field_settings)
-        :zip(flua.infinite())
-        :map(function (field_toggle, field_index)
-        return {
-            name = setting_name_formats.field_toggle:format(entry.name):format(field_toggle),
+for index, category in ipairs(category_list) do
+    local effect_index = 1
+    for _, effect_toggle in pairs(category.effect_settings or {}) do
+        settings[#settings + 1] = {
+            name = setting_formats.effect_flag:format(category.name, effect_toggle),
             type = 'bool-setting',
             setting_type = 'runtime-global',
-            order = ('d-%s-%s'):format(ordering_table[index * 3], flag_ordering_table[field_index]),
-            default_value = true
+            order = ('%s-c-%s'):format(ordering_table[index * 3], ordering_table[effect_index]),
+            default_value = true,
         }
-    end, 1)
+        effect_index = effect_index + 1
+    end
 end
 
-data:extend(flua.duplicate(1, create_infinite_research_flag())
-    :concat(config:map(create_research_enabled_setting, 1))
-    :concat(config:map(create_research_config_setting, 1))
-    :concat(config:map(create_flat_bonus_setting, 1))
-    :concat(config:map(create_multiplier_setting, 1))
-    :concat(config:flatmap(create_field_toggle_settings, 1))
-    :list()
-)
+if #settings > 0 then
+    data:extend(settings)
+end

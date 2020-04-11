@@ -1,142 +1,109 @@
-local flua = require('flua')
-local config_ext = flua.ivalues(require('config_ext'))
+local categories = require('categories')
 local data_utils = require('data_utils')
-local player_technology_format = 'qol-%s-%d-%d'
-local internal_technology_format = 'qolinternal-%s-%d'
+local config = require('config')
+local setting_formats = require('defines.setting_name_formats')
+local technology_formats = require('defines.technology_name_formats')
 
-local ordering_table = data_utils.create_ordering_table(math.max(
-    config_ext:map(function (entry) return #entry.config end):max(),
-    config_ext:count()
-))
-
-local player_technologies = config_ext
-    :filter(function (entry)
-        -- log(('%s: is_research_enabled: %q'):format(entry.name, tostring(entry.is_research_enabled)))
-        return entry.is_research_enabled
-    end)
-
-player_technologies = player_technologies:flatmap(function (entry)
-    local config = entry.config
-    local technology_icon = ('__qol_research__/graphics/%s.png'):format(entry.name)
-    return flua.ipairs(config):flatmap(function (tier_index, tier)
-        -- Infinite technology
-        local localised_description = {
-            ('technology-description.qol-%s'):format(entry.name),
-            entry.description_factory(tier.effect_value)
-        }
-        local tier_order = ('qol-research-%s-%s'):format(ordering_table[entry.index], ordering_table[tier_index])
-        local prerequisites
-        if tier.requirement == 0 then
-            prerequisites = table.deepcopy(config.prerequisites)
-        else
-            prerequisites = { (player_technology_format):format(entry.name, tier_index - 1, tier.requirement) }
+local ordering_table
+do
+    local count = categories.count
+    for _, tiers in pairs(config) do
+        count = math.max(count, #tiers)
+        for _, tier in ipairs(tiers) do
+            count = math.max(tier.technology_count)
         end
-        if tier.tier_depth == 0 then
-            if tier_index ~= #config then
-                error(('[qol] invalid config for %s, tier %s cannot be infinite because it is not the last'):format(entry.name, tier_index))
+    end
+    ordering_table = data_utils.create_ordering_table(count)
+end
+
+local player_technologies = {}
+local function create_player_technologies_for_category(category, tiers)
+    if not settings.startup[setting_formats.research_enabled:format(category.name)].value then
+        return
+    end
+
+    local technology_icon = ('__qol_research__/graphics/%s.png'):format(category.name)
+    for tier_index, tier in ipairs(tiers) do
+        local localised_description = {
+            ('technology-description.qol-%s'):format(category.name),
+            category.description_factory(tier.bonus_per_technology)
+        }
+
+        for technology_index = 1, math.max(tier.technology_count, 1) do
+            local prerequisites
+            if technology_index == 1 then
+                prerequisites = tier.prerequisites
+            else
+                prerequisites = { technology_formats.player:format(category.name, tier_index, technology_index - 1) }
             end
-            return flua.duplicate(1, {
+
+            player_technologies[#player_technologies + 1] = {
                 type = 'technology',
-                name = (player_technology_format):format(entry.name, tier_index, 1),
+                name = technology_formats.player:format(category.name, tier_index, technology_index),
                 localised_description = localised_description,
                 icon = technology_icon,
                 icon_size = 128,
                 prerequisites = prerequisites,
                 unit =
                 {
-                    count_formula = tier.cost_formula,
+                    count_formula = tier.cycle_count_formula,
+                    time = tier.cycle_time,
                     ingredients = tier.cycle_ingredients,
-                    time = tier.cycle_duration
                 },
-                max_level = 'infinite',
                 upgrade = true,
-                order = tier_order
-            })
+                order = ('qol-research-%s-%s-%s'):format(
+                    ordering_table[category.index],
+                    ordering_table[tier_index],
+                    ordering_table[technology_index]
+                ),
+            }
         end
 
-        return flua.range(tier.tier_depth):map(function (technology_index)
-            local current_prerequisites
-            if technology_index == 1 then
-                current_prerequisites = prerequisites
-            else
-                current_prerequisites = { (player_technology_format):format(entry.name, tier_index, technology_index - 1) }
-            end
-
-            return {
-                type = 'technology',
-                name = (player_technology_format):format(entry.name, tier_index, technology_index),
-                localised_description = localised_description,
-                icon = technology_icon,
-                icon_size = 128,
-                prerequisites = current_prerequisites,
-                unit =
-                {
-                    count_formula = tier.cost_formula,
-                    ingredients = tier.cycle_ingredients,
-                    time = tier.cycle_duration
-                },
-                upgrade = true,
-                order = tier_order
-            }
-        end)
-    end, 1)
-end, 1):list()
+        -- Special case for infinite research
+        if tier.technology_count == 0 then
+            player_technologies[#player_technologies].max_level = 'infinite'
+        end
+    end
+end
+for category_name, tiers in pairs(config) do
+    create_player_technologies_for_category(categories.map[category_name], tiers)
+end
 
 if #player_technologies > 0 then
     data:extend(player_technologies)
 end
 
-local internal_technologies = config_ext
-    :flatmap(function (entry)
-        return entry.fields:flatmap(function (field)
-            return flua.range(0, entry.field_technology.count - 1)
-                :map(function (index)
-                return {
-                    type = 'technology',
-                    name = internal_technology_format:format(field, index + 1),
-                    localised_name = { 'qol-internal-tech.name' },
-                    localised_description = { 'qol-internal-tech.description' },
-                    icon = '__qol_research__/graphics/internal-tech.png',
-                    icon_size = 128,
-                    enabled = false,
-                    hidden = true,
-                    unit =
-                    {
-                        count = 1,
-                        time = 1,
-                        ingredients = { }
-                    },
-                    effects =
-                    { {
-                        type = field,
-                        modifier = entry.field_technology.value_scale * math.pow(2, index),
-                    } },
-                    prerequisites = index ~= 0 and { internal_technology_format:format(field, index) } or nil,
-                    order = '~~~~~~~~~~~~~~',
-                    upgrade = true,
-                }
-            end)
-            :concat(flua.duplicate(1, {
+local internal_technologies = {}
+for _, category in ipairs(categories.list) do
+    for _, effect in ipairs(category.effects) do
+        for index = 1, category.internal_technology_spec.count do
+            internal_technologies[#internal_technologies + 1] = {
                 type = 'technology',
-                name = internal_technology_format:format(field, entry.field_technology.count + 1),
+                name = technology_formats.internal:format(effect, index),
                 localised_name = { 'qol-internal-tech.name' },
                 localised_description = { 'qol-internal-tech.description' },
                 icon = '__qol_research__/graphics/internal-tech.png',
                 icon_size = 128,
                 enabled = false,
+                hidden = true,
                 unit =
                 {
                     count = 1,
                     time = 1,
                     ingredients = { }
                 },
-                prerequisites = { internal_technology_format:format(field, entry.field_technology.count) },
+                effects =
+                { {
+                    type = effect,
+                    modifier = category.internal_technology_spec.value_scale * math.pow(2, index - 1),
+                } },
+                prerequisites = index ~= 1 and { technology_formats.internal:format(effect, index - 1) } or nil,
                 order = '~~~~~~~~~~~~~~',
                 upgrade = true,
-            }))
-        end)
-    end)
-    :list()
+            }
+        end
+    end
+end
 
 if #internal_technologies > 0 then
     data:extend(internal_technologies)
