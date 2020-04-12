@@ -214,6 +214,7 @@ script.on_event(defines.events.on_research_finished, function (event)
 end)
 
 script.on_event(defines.events.on_runtime_mod_setting_changed, function ()
+    log('setting changed')
     update_for_all_forces()
 end)
 script.on_init(function ()
@@ -244,11 +245,11 @@ script.on_configuration_changed(function (changes)
     if qol_research ~= nil then
         local old_version = qol_research.old_version
         if old_version ~= nil then
-            local version_major, version_minor = old_version:match('^(%d+).(%d+).%d+$')
-            version_major, version_minor = tonumber(version_major), tonumber(version_minor)
+            local version_major = old_version:match('^(%d+).(%d+).%d+$')
+            version_major = tonumber(version_major)
 
             if version_major < 3 then
-                game.print(('[qol] Updated to version 3.%d'):format(version_minor))
+                game.print(('[qol] Updated to version 3'))
                 game.print('[qol] Check out https://qol-research.aidiakapi.com/ if you want to create your own configuration!')
             end
         end
@@ -260,12 +261,12 @@ commands.add_command('qol-sync', [[Syncs all technology effects, you can run thi
     if player.admin then
         local was_logging_enabled = is_logging_enabled
         is_logging_enabled = true
-        player.print('[qol] syncing, details can be found in the log file')
+        player.print('[qol] Synced, any details can be found in the log file.')
         update_for_all_forces()
         plog('syncing completed')
         is_logging_enabled = was_logging_enabled
     else
-        player.print('[qol] you must be an admin to run this command')
+        player.print('[qol] You must be an admin to run this command.')
     end
 end)
 
@@ -275,8 +276,8 @@ commands.add_command('qol-reset-technology-effects', [[Calls LuaForce::reset_tec
         for _, force in pairs(game.forces) do
             force.reset_technology_effects()
         end
-        player.print('[qol] technology effects reset')
+        player.print('[qol] Technology effects reset.')
     else
-        player.print('[qol] you must be an admin to run this command')
+        player.print('[qol] You must be an admin to run this command.')
     end
 end)
