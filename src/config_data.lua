@@ -52,7 +52,7 @@ end
 
 if settings.startup[setting_name_formats.modpack_compatibility_enabled].value then
     for _, override in ipairs(overrides) do
-        if is_matching_override then
+        if is_matching_override(override) then
             local external_config = get_config_from_external(override)
             log(('[qol] enable default %s configuration override for %s'):format(
                 external_config and 'external' or 'internal',
