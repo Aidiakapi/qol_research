@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 3.2.1
+Date: 07. 11. 2020
+  Features:
+    - Add compatibility script that partially stops Krastorio2 from rewriting the tech tree. This should allow you to make custom configurations work with that mod.
+---------------------------------------------------------------------------------------------------
 Version: 3.2.0
 Date: 26. 09. 2020
   Changes:

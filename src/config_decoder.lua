@@ -11,18 +11,19 @@
                 prerequisites = {
                     'qol-category-name-1-3',
                     'logistic-science-pack',
-                    ...
+                    ... next prerequisite
                 },
 
                 cycle_count_formula = '100*L',
                 cycle_time = 30, -- seconds
                 cycle_ingredients = {
                     { 'logistic-science-pack', 2 },
-                    ...
+                    ... next ingredient
                 },
-            }
+            },
+            ... next tier
         },
-        ...
+        ... next category
     }
 ]]
 
