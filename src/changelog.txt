@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 3.4.0
+Date: 21. 10. 2024
+  Features:
+    - Preliminary update to Factorio 2.0/Space Age. Does not yet incorporate the new science packs, but it's usable.
+---------------------------------------------------------------------------------------------------
 Version: 3.3.3
 Date: 19. 02. 2023
   Features:

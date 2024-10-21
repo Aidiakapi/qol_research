@@ -91,6 +91,7 @@ for _, category in ipairs(categories.list) do
                 icon_size = 128,
                 enabled = false,
                 hidden = true,
+                hidden_in_factoriopedia = true,
                 unit =
                 {
                     count = 1,
