@@ -239,9 +239,6 @@ script.on_configuration_changed(function (changes)
 
     plog('configuration change detected, updating for all forces and resetting technology effects')
     update_for_all_forces()
-    for _, force in pairs(game.forces) do
-        force.reset_technology_effects()
-    end
 
     is_logging_enabled = was_logging_enabled
 

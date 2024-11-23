@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 3.4.1
+Date: 23. 11. 2024
+  Changes:
+    - Remove `reset_technology_effects()` from running whenever configuration changes. Should improve compatibility with
+      some other mods. Thanks to enraged_tomato for reporting, and BlooSkies for investigating.
+---------------------------------------------------------------------------------------------------
 Version: 3.4.0
 Date: 21. 10. 2024
   Features:
