@@ -2,7 +2,7 @@
 Version: 3.4.2
 Date: 4. 5. 2025
   Changes:
-    - fixes Krastorio2 integration
+    - Update integration with newest version of Krastorio2. Thanks to HerptyDerpoty for the contribution.
 ---------------------------------------------------------------------------------------------------
 Version: 3.4.1
 Date: 23. 11. 2024
