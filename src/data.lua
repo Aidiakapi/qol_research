@@ -49,6 +49,13 @@ local function create_player_technologies_for_category(category, tiers)
                 icon = technology_icon,
                 icon_size = 128,
                 prerequisites = prerequisites,
+                -- Bonuses are applied by control.lua through internal technologies.
+                -- Declare the scripted effect so mods such as SeaBlock do not
+                -- remove these technologies as having no effects.
+                effects = { {
+                    type = 'nothing',
+                    effect_description = localised_description,
+                } },
                 unit =
                 {
                     count_formula = tier.cycle_count_formula,

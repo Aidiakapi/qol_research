@@ -1,4 +1,9 @@
 ---------------------------------------------------------------------------------------------------
+Version: 3.4.4
+Date: 30. 10. 2026
+  Bugfixes:
+    - Fix a crash when adding the mod to a SeaBlock save by preventing SeaBlock from removing QoL research technologies.
+---------------------------------------------------------------------------------------------------
 Version: 3.4.3
 Date: 30. 10. 2026
   Changes:
